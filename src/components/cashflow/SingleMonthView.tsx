@@ -37,7 +37,7 @@ interface SingleMonthViewProps {
       custom_interval_days?: number | null;
       end_date?: string | null;
     };
-  }) => void;
+  }) => void | Promise<void>;
   onDuplicateRow?: (row: CashflowRow) => void;
   onCreateCategory?: (name: string, isIncome: boolean) => Promise<string>;
 }
@@ -56,67 +56,6 @@ export function SingleMonthView({
   onDuplicateRow,
   onCreateCategory,
 }: SingleMonthViewProps) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const lastClickedRef = useRef<string | null>(null);
-
-  // Build a flat ordered list of all row IDs for shift-click range selection
-  const allRows = [...incomeGroups, ...expenseGroups].flatMap((g) => g.rows);
-  const allRowIds = allRows.map((r) => r.id);
-
-  const handleRowClick = useCallback((id: string, e: React.MouseEvent) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-
-      if (e.shiftKey && lastClickedRef.current) {
-        // Range select
-        const startIdx = allRowIds.indexOf(lastClickedRef.current);
-        const endIdx = allRowIds.indexOf(id);
-        if (startIdx >= 0 && endIdx >= 0) {
-          const [lo, hi] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
-          for (let i = lo; i <= hi; i++) {
-            next.add(allRowIds[i]!);
-          }
-        }
-      } else if (e.metaKey || e.ctrlKey) {
-        // Toggle individual
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-      } else {
-        // Single select (or deselect if already the only one selected)
-        if (next.size === 1 && next.has(id)) {
-          next.clear();
-        } else {
-          next.clear();
-          next.add(id);
-        }
-      }
-
-      lastClickedRef.current = id;
-      return next;
-    });
-  }, [allRowIds]);
-
-  // Cmd+D to duplicate selected, Escape to deselect
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && selected.size > 0) {
-        setSelected(new Set());
-        return;
-      }
-
-      if ((e.metaKey || e.ctrlKey) && e.key === "d" && selected.size > 0 && onDuplicateRow) {
-        e.preventDefault();
-        for (const id of selected) {
-          const row = allRows.find((r) => r.id === id);
-          if (row) onDuplicateRow(row);
-        }
-        setSelected(new Set());
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [selected, allRows, onDuplicateRow]);
-
   return (
     <div className="space-y-5">
       {/* Summary strip */}
@@ -142,19 +81,6 @@ export function SingleMonthView({
         />
       </div>
 
-      {/* Selection bar */}
-      {selected.size > 0 && (
-        <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg bg-accent/8 border border-accent/20 text-[12px] text-accent animate-slide-up">
-          <span className="font-semibold">{selected.size} selected</span>
-          <span className="text-accent/50">·</span>
-          <kbd className="px-1 py-px rounded bg-accent/10 text-[10px] font-mono font-semibold">⌘D</kbd>
-          <span className="text-accent/70">duplicate</span>
-          <span className="text-accent/50">·</span>
-          <kbd className="px-1 py-px rounded bg-accent/10 text-[10px] font-mono font-semibold">Esc</kbd>
-          <span className="text-accent/70">clear</span>
-        </div>
-      )}
-
       {/* Income section */}
       <TableSection
         title="Income"
@@ -163,8 +89,6 @@ export function SingleMonthView({
         groups={incomeGroups}
         month={month}
         categories={categories}
-        selected={selected}
-        onRowClick={handleRowClick}
         onToggleStatus={onToggleStatus}
         onDeleteRow={onDeleteRow}
         onStopRecurrence={onStopRecurrence}
@@ -182,8 +106,6 @@ export function SingleMonthView({
         groups={expenseGroups}
         month={month}
         categories={categories}
-        selected={selected}
-        onRowClick={handleRowClick}
         onToggleStatus={onToggleStatus}
         onDeleteRow={onDeleteRow}
         onStopRecurrence={onStopRecurrence}
@@ -238,8 +160,6 @@ function TableSection({
   groups,
   month,
   categories,
-  selected,
-  onRowClick,
   onToggleStatus,
   onDeleteRow,
   onStopRecurrence,
@@ -254,8 +174,6 @@ function TableSection({
   groups: CashflowGroup[];
   month: string;
   categories?: Category[];
-  selected: Set<string>;
-  onRowClick: (id: string, e: React.MouseEvent) => void;
   onToggleStatus: SingleMonthViewProps["onToggleStatus"];
   onDeleteRow: SingleMonthViewProps["onDeleteRow"];
   onStopRecurrence?: SingleMonthViewProps["onStopRecurrence"];
@@ -300,10 +218,6 @@ function TableSection({
             group={group}
             variant={variant}
             categories={categories}
-            selected={selected}
-            onRowClick={onRowClick}
-            selected={selected.has(row.id)}
-            onRowClick={onRowClick}
             onToggleStatus={onToggleStatus}
             onDeleteRow={onDeleteRow}
             onStopRecurrence={onStopRecurrence}
@@ -333,8 +247,6 @@ function GroupBlock({
   group,
   variant,
   categories,
-  selected,
-  onRowClick,
   onToggleStatus,
   onDeleteRow,
   onStopRecurrence,
@@ -345,8 +257,6 @@ function GroupBlock({
   group: CashflowGroup;
   variant: "income" | "expense";
   categories?: Category[];
-  selected: Set<string>;
-  onRowClick: (id: string, e: React.MouseEvent) => void;
   onToggleStatus: SingleMonthViewProps["onToggleStatus"];
   onDeleteRow: SingleMonthViewProps["onDeleteRow"];
   onStopRecurrence?: SingleMonthViewProps["onStopRecurrence"];
@@ -366,8 +276,6 @@ function GroupBlock({
             row={row}
             variant={variant}
             categories={categories}
-            selected={selected.has(row.id)}
-            onRowClick={onRowClick}
             onToggleStatus={onToggleStatus}
             onDeleteRow={onDeleteRow}
             onStopRecurrence={onStopRecurrence}
@@ -433,8 +341,6 @@ function ItemRow({
   row,
   variant,
   categories,
-  selected,
-  onRowClick,
   onToggleStatus,
   onDeleteRow,
   onStopRecurrence,
@@ -445,8 +351,6 @@ function ItemRow({
   row: CashflowRow;
   variant: "income" | "expense";
   categories?: Category[];
-  selected: boolean;
-  onRowClick: (id: string, e: React.MouseEvent) => void;
   onToggleStatus: SingleMonthViewProps["onToggleStatus"];
   onDeleteRow: SingleMonthViewProps["onDeleteRow"];
   onStopRecurrence?: SingleMonthViewProps["onStopRecurrence"];
@@ -464,10 +368,6 @@ function ItemRow({
   const editRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const filteredCategories = (categories ?? []).filter((c) =>
-    variant === "income" ? c.is_income : !c.is_income
-  );
-
   // Close menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
@@ -480,8 +380,7 @@ function ItemRow({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
 
-  function startEditing(e: React.MouseEvent) {
-    e.stopPropagation();
+  function startEditing() {
     setEditPayee(row.label);
     setEditAmount(String(row.amount));
     setEditDate(row.date);
@@ -516,6 +415,9 @@ function ItemRow({
 
   // --- Edit mode ---
   if (editing) {
+    const filteredCategories = (categories ?? []).filter((c) =>
+      variant === "income" ? c.is_income : !c.is_income
+    );
     return (
       <div className="border-b border-border/60 last:border-b-0 bg-accent/[0.03]">
         <div className={`grid ${GRID_COLS} gap-x-3 items-center px-3 h-9`}>
@@ -604,18 +506,8 @@ function ItemRow({
   const isPlanned = row.status === "planned";
 
   return (
-    <div
-      className={`group border-b border-border/60 last:border-b-0 cursor-default ${
-        selected ? "bg-accent/[0.07] ring-1 ring-inset ring-accent/20" : ""
-      }`}
-      onClick={(e) => {
-        // Don't select when clicking interactive elements
-        const target = e.target as HTMLElement;
-        if (target.closest("button, input, select, [role='combobox']")) return;
-        onRowClick(row.id, e);
-      }}
-    >
-      <div className={`grid ${GRID_COLS} gap-x-3 items-center px-3 h-9 ${selected ? "" : "hover:bg-surface-alt/50"} transition-colors`}>
+    <div className="group border-b border-border/60 last:border-b-0">
+      <div onDoubleClick={startEditing} className={`grid ${GRID_COLS} gap-x-3 items-center px-3 h-9 hover:bg-surface-alt/50 transition-colors cursor-default`}>
         {/* Payee */}
         <div className="flex items-center gap-1.5 min-w-0">
           <span
@@ -1135,7 +1027,7 @@ function InlineAddRow({
     if (!payee.trim() || !amt || amt <= 0) return;
 
     setSaving(true);
-    onAddRow({
+    await onAddRow({
       payee: payee.trim(),
       type,
       amount: amt,
