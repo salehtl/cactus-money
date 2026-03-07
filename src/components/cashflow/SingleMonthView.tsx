@@ -13,7 +13,8 @@ const FREQUENCIES: { value: RecurringTransaction["frequency"]; label: string; sh
 ];
 
 // Shared grid: Payee | Date | Category | Recur | Amount | Status | Actions
-const GRID_COLS = "grid-cols-[1fr_72px_88px_52px_92px_52px_52px]";
+// Proportional fr columns for content; fixed px for utility columns.
+const GRID_COLS = "grid-cols-[3fr_1.2fr_1.5fr_52px_1.5fr_56px_48px]";
 
 interface SingleMonthViewProps {
   incomeGroups: CashflowGroup[];
