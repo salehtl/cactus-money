@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useDb } from "../context/DbContext.tsx";
 import { useTheme } from "../hooks/useTheme.ts";
+import { Button } from "./ui/Button.tsx";
 import { getSetting, setSetting } from "../db/queries/settings.ts";
 
 const STEPS = [
@@ -13,7 +14,6 @@ const STEPS = [
       "Everything runs locally in your browser — fast, private, yours",
       "Built for simplicity: add transactions, see your cashflow, stay sharp",
     ],
-    icon: WelcomeIcon,
   },
   {
     key: "features",
@@ -50,32 +50,36 @@ const STEPS = [
   },
 ] as const;
 
+// null = loading, false = already completed, true = show onboarding
+type OnboardingState = null | false | true;
+
 export function Onboarding() {
   const db = useDb();
   const { isDark } = useTheme();
-  const [show, setShow] = useState(false);
+  const [state, setState] = useState<OnboardingState>(null);
   const [step, setStep] = useState(0);
-  const [loaded, setLoaded] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
+    let active = true;
     getSetting(db, "onboarding_complete").then((v) => {
-      if (v !== "true") setShow(true);
-      setLoaded(true);
+      if (!active) return;
+      setState(v !== "true");
     });
+    return () => { active = false; };
   }, [db]);
 
   useEffect(() => {
-    if (show && dialogRef.current && !dialogRef.current.open) {
+    if (state === true && dialogRef.current && !dialogRef.current.open) {
       dialogRef.current.showModal();
     }
-  }, [show]);
+  }, [state]);
 
-  if (!loaded || !show) return null;
+  if (state !== true) return null;
 
   const current = STEPS[step]!;
   const isLast = step === STEPS.length - 1;
-  const Icon = current.icon;
+  const Icon = "icon" in current ? current.icon : null;
   const logoSrc = isDark
     ? "/meta-media/logo-square-darkmode.svg"
     : "/meta-media/logo-square-lightmode.svg";
@@ -83,7 +87,7 @@ export function Onboarding() {
   async function handleDismiss() {
     await setSetting(db, "onboarding_complete", "true");
     dialogRef.current?.close();
-    setShow(false);
+    setState(false);
   }
 
   return (
@@ -108,12 +112,12 @@ export function Onboarding() {
 
             {/* Step icon + logo on first step */}
             <div className="flex flex-col items-center">
-              {step === 0 ? (
-                <img src={logoSrc} alt="" className="w-14 h-14 mb-4" />
-              ) : (
+              {Icon ? (
                 <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4 text-accent">
                   <Icon />
                 </div>
+              ) : (
+                <img src={logoSrc} alt="" className="w-14 h-14 mb-4" />
               )}
               <h2 className="text-lg font-bold text-center">{current.title}</h2>
               <p className="text-xs text-text-muted text-center mt-1">{current.subtitle}</p>
@@ -169,30 +173,18 @@ export function Onboarding() {
             {/* Buttons */}
             <div className="flex items-center gap-2">
               {step > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setStep((s) => s - 1)}
-                  className="px-3 py-1.5 text-xs font-medium text-text-muted hover:text-text rounded-lg hover:bg-surface-alt transition-colors cursor-pointer"
-                >
+                <Button variant="ghost" size="sm" onClick={() => setStep((s) => s - 1)}>
                   Back
-                </button>
+                </Button>
               )}
               {isLast ? (
-                <button
-                  type="button"
-                  onClick={handleDismiss}
-                  className="px-4 py-1.5 text-xs font-medium bg-accent text-white rounded-lg hover:bg-accent/90 transition-colors cursor-pointer"
-                >
+                <Button size="sm" onClick={handleDismiss}>
                   Get started
-                </button>
+                </Button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setStep((s) => s + 1)}
-                  className="px-4 py-1.5 text-xs font-medium bg-accent text-white rounded-lg hover:bg-accent/90 transition-colors cursor-pointer"
-                >
+                <Button size="sm" onClick={() => setStep((s) => s + 1)}>
                   Next
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -203,14 +195,6 @@ export function Onboarding() {
 }
 
 // --- Step Icons ---
-
-function WelcomeIcon() {
-  return (
-    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-    </svg>
-  );
-}
 
 function FeaturesIcon() {
   return (

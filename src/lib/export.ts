@@ -23,14 +23,6 @@ export async function exportJSON(db: DbClient): Promise<string> {
   return JSON.stringify(data, null, 2);
 }
 
-export interface CSVExportOptions {
-  columns: string[];
-  type: "all" | "income" | "expense";
-  dateFrom?: string;
-  dateTo?: string;
-  sortOrder: "desc" | "asc";
-}
-
 export const CSV_COLUMNS = [
   { key: "date", label: "Date" },
   { key: "type", label: "Type" },
@@ -42,6 +34,16 @@ export const CSV_COLUMNS = [
   { key: "group_name", label: "Group" },
   { key: "frequency", label: "Recurring" },
 ] as const;
+
+export type CSVColumnKey = typeof CSV_COLUMNS[number]["key"];
+
+export interface CSVExportOptions {
+  columns: CSVColumnKey[];
+  type: "all" | "income" | "expense";
+  dateFrom?: string;
+  dateTo?: string;
+  sortOrder: "desc" | "asc";
+}
 
 export const DEFAULT_CSV_OPTIONS: CSVExportOptions = {
   columns: ["date", "type", "amount", "payee", "category", "status"],

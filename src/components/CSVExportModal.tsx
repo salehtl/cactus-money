@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Modal } from "./ui/Modal.tsx";
 import { Button } from "./ui/Button.tsx";
+import { DatePicker } from "./ui/Calendar.tsx";
 import { useDb } from "../context/DbContext.tsx";
 import { useToast } from "./ui/Toast.tsx";
 import { getSetting, setSetting } from "../db/queries/settings.ts";
@@ -10,6 +11,7 @@ import {
   CSV_COLUMNS,
   DEFAULT_CSV_OPTIONS,
   type CSVExportOptions,
+  type CSVColumnKey,
 } from "../lib/export.ts";
 
 interface Props {
@@ -26,7 +28,10 @@ export function CSVExportModal({ open, onClose, onExported }: Props) {
 
   useEffect(() => {
     if (!open) return;
+    setLoaded(false);
+    let active = true;
     getSetting(db, "csv_export_prefs").then((raw) => {
+      if (!active) return;
       if (raw) {
         try {
           const saved = JSON.parse(raw) as Partial<CSVExportOptions>;
@@ -37,9 +42,10 @@ export function CSVExportModal({ open, onClose, onExported }: Props) {
       }
       setLoaded(true);
     });
+    return () => { active = false; };
   }, [db, open]);
 
-  function toggleColumn(key: string) {
+  function toggleColumn(key: CSVColumnKey) {
     setOptions((prev) => {
       const cols = prev.columns.includes(key)
         ? prev.columns.filter((c) => c !== key)
@@ -54,7 +60,6 @@ export function CSVExportModal({ open, onClose, onExported }: Props) {
       return;
     }
     try {
-      // Save preferences
       await setSetting(db, "csv_export_prefs", JSON.stringify(options));
 
       const csv = await exportCSV(db, options);
@@ -125,28 +130,23 @@ export function CSVExportModal({ open, onClose, onExported }: Props) {
             Date Range
           </label>
           <div className="flex items-center gap-2">
-            <input
-              type="date"
+            <DatePicker
               value={options.dateFrom ?? ""}
-              onChange={(e) =>
-                setOptions((prev) => ({
-                  ...prev,
-                  dateFrom: e.target.value || undefined,
-                }))
+              onChange={(date) =>
+                setOptions((prev) => ({ ...prev, dateFrom: date || undefined }))
               }
-              className="flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent"
+              placeholder="Start date"
+              className="flex-1"
             />
             <span className="text-xs text-text-light">to</span>
-            <input
-              type="date"
+            <DatePicker
               value={options.dateTo ?? ""}
-              onChange={(e) =>
-                setOptions((prev) => ({
-                  ...prev,
-                  dateTo: e.target.value || undefined,
-                }))
+              onChange={(date) =>
+                setOptions((prev) => ({ ...prev, dateTo: date || undefined }))
               }
-              className="flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent"
+              placeholder="End date"
+              min={options.dateFrom}
+              className="flex-1"
             />
           </div>
           <p className="text-[10px] text-text-light mt-1">
