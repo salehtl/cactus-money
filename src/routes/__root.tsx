@@ -3,6 +3,7 @@ import { DbProvider } from "../context/DbContext.tsx";
 import { ToastProvider } from "../components/ui/Toast.tsx";
 import { Sidebar, MobileNav } from "../components/layout/Sidebar.tsx";
 import { AdminPanel } from "../components/AdminPanel.tsx";
+import { Onboarding } from "../components/Onboarding.tsx";
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -19,6 +20,7 @@ function RootLayout() {
           </main>
           <MobileNav />
           <AdminPanel />
+          <Onboarding />
         </div>
       </ToastProvider>
     </DbProvider>

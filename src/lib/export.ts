@@ -23,18 +23,70 @@ export async function exportJSON(db: DbClient): Promise<string> {
   return JSON.stringify(data, null, 2);
 }
 
-export async function exportCSV(db: DbClient): Promise<string> {
+export interface CSVExportOptions {
+  columns: string[];
+  type: "all" | "income" | "expense";
+  dateFrom?: string;
+  dateTo?: string;
+  sortOrder: "desc" | "asc";
+}
+
+export const CSV_COLUMNS = [
+  { key: "date", label: "Date" },
+  { key: "type", label: "Type" },
+  { key: "amount", label: "Amount" },
+  { key: "payee", label: "Payee" },
+  { key: "notes", label: "Notes" },
+  { key: "category", label: "Category" },
+  { key: "status", label: "Status" },
+  { key: "group_name", label: "Group" },
+  { key: "frequency", label: "Recurring" },
+] as const;
+
+export const DEFAULT_CSV_OPTIONS: CSVExportOptions = {
+  columns: ["date", "type", "amount", "payee", "category", "status"],
+  type: "all",
+  sortOrder: "desc",
+};
+
+export async function exportCSV(db: DbClient, options?: CSVExportOptions): Promise<string> {
+  const opts = options ?? DEFAULT_CSV_OPTIONS;
+
+  const conditions: string[] = [];
+  const params: any[] = [];
+
+  if (opts.type === "income") {
+    conditions.push("t.type = 'income'");
+  } else if (opts.type === "expense") {
+    conditions.push("t.type = 'expense'");
+  }
+  if (opts.dateFrom) {
+    conditions.push("t.date >= ?");
+    params.push(opts.dateFrom);
+  }
+  if (opts.dateTo) {
+    conditions.push("t.date <= ?");
+    params.push(opts.dateTo);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
   const { rows } = await db.exec(
     `SELECT t.date, t.type, t.amount, t.payee, t.notes, t.status, t.group_name,
-            COALESCE(c.name, '') as category
+            COALESCE(c.name, '') as category,
+            COALESCE(r.frequency, '') as frequency
      FROM transactions t
      LEFT JOIN categories c ON t.category_id = c.id
-     ORDER BY t.date DESC`
+     LEFT JOIN recurring_transactions r ON t.recurring_id = r.id
+     ${where}
+     ORDER BY t.date ${opts.sortOrder === "asc" ? "ASC" : "DESC"}`,
+    params
   );
 
-  const headers = ["Date", "Type", "Amount", "Payee", "Notes", "Category", "Status", "Group"];
+  const colDefs = CSV_COLUMNS.filter((c) => opts.columns.includes(c.key));
+  const headers = colDefs.map((c) => c.label);
   const csvRows = rows.map((row: any) =>
-    [row.date, row.type, row.amount, csvEscape(row.payee), csvEscape(row.notes), csvEscape(row.category), row.status, csvEscape(row.group_name)].join(",")
+    colDefs.map((c) => csvEscape(String(row[c.key] ?? ""))).join(",")
   );
 
   return [headers.join(","), ...csvRows].join("\n");

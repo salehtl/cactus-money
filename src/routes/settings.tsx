@@ -7,7 +7,8 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog.tsx";
 import { useToast } from "../components/ui/Toast.tsx";
 import { useDb } from "../context/DbContext.tsx";
 import { useCategories } from "../hooks/useCategories.ts";
-import { exportJSON, exportCSV, downloadFile } from "../lib/export.ts";
+import { exportJSON, downloadFile } from "../lib/export.ts";
+import { CSVExportModal } from "../components/CSVExportModal.tsx";
 import { importJSON } from "../lib/import.ts";
 import {
   isFileSystemAccessSupported,
@@ -38,6 +39,7 @@ function SettingsPage() {
   const [autoExportEnabled, setAutoExportEnabled] = useState(false);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [importData, setImportData] = useState<string | null>(null);
+  const [showCSVExport, setShowCSVExport] = useState(false);
 
   useEffect(() => {
     getSetting(db, "last_export").then(setLastExport);
@@ -53,16 +55,6 @@ function SettingsPage() {
       await setSetting(db, "last_export", now);
       setLastExport(now);
       toast("JSON exported successfully");
-    } catch {
-      toast("Export failed", "error");
-    }
-  }
-
-  async function handleExportCSV() {
-    try {
-      const csv = await exportCSV(db);
-      downloadFile(csv, `transactions-${new Date().toISOString().split("T")[0]}.csv`, "text/csv");
-      toast("CSV exported successfully");
     } catch {
       toast("Export failed", "error");
     }
@@ -184,7 +176,7 @@ function SettingsPage() {
             <Button variant="secondary" size="sm" onClick={handleExportJSON}>
               Export JSON
             </Button>
-            <Button variant="secondary" size="sm" onClick={handleExportCSV}>
+            <Button variant="secondary" size="sm" onClick={() => setShowCSVExport(true)}>
               Export CSV
             </Button>
             <Button variant="secondary" size="sm" onClick={handleImportSelect}>
@@ -212,6 +204,16 @@ function SettingsPage() {
           <p>All data stored locally on this device.</p>
         </div>
       </section>
+
+      <CSVExportModal
+        open={showCSVExport}
+        onClose={() => setShowCSVExport(false)}
+        onExported={async () => {
+          const now = new Date().toISOString();
+          await setSetting(db, "last_export", now);
+          setLastExport(now);
+        }}
+      />
 
       <ConfirmDialog
         open={showImportConfirm}
