@@ -959,6 +959,8 @@ function ReviewRow({
           onClick={() =>
             onUpdate(index, {
               type: row.type === "income" ? "expense" : "income",
+              category_id: null,
+              category: null,
             })
           }
           disabled={disabled}

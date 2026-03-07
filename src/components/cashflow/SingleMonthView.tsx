@@ -25,7 +25,7 @@ interface SingleMonthViewProps {
   onToggleStatus: (id: string, newStatus: "planned" | "confirmed") => void;
   onDeleteRow: (id: string) => void;
   onStopRecurrence?: (recurringId: string) => void;
-  onEditRow: (id: string, updates: { payee?: string; amount?: number; category_id?: string | null; date?: string; group_name?: string; status?: "planned" | "confirmed" }) => void;
+  onEditRow: (id: string, updates: { payee?: string; amount?: number; type?: "income" | "expense"; category_id?: string | null; date?: string; group_name?: string; status?: "planned" | "confirmed" }) => void;
   onAddRow: (data: {
     payee: string;
     type: "income" | "expense";
@@ -367,6 +367,7 @@ function ItemRow({
   const [editDate, setEditDate] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editStatus, setEditStatus] = useState<"planned" | "confirmed">("confirmed");
+  const [editType, setEditType] = useState<"income" | "expense">("expense");
   const editRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -388,6 +389,7 @@ function ItemRow({
     setEditDate(row.date);
     setEditCategoryId(row.categoryId ?? "");
     setEditStatus(row.status);
+    setEditType(row.type);
     setEditing(true);
     requestAnimationFrame(() => editRef.current?.focus());
   }
@@ -401,6 +403,7 @@ function ItemRow({
     if (newPayee !== row.label) updates.payee = newPayee;
     if (newAmount !== row.amount) updates.amount = newAmount;
     if (editDate !== row.date) updates.date = editDate;
+    if (editType !== row.type) updates.type = editType;
     if ((editCategoryId || null) !== row.categoryId) updates.category_id = editCategoryId || null;
     if (editStatus !== row.status) updates.status = editStatus;
 
@@ -418,14 +421,23 @@ function ItemRow({
   // --- Edit mode ---
   if (editing) {
     const filteredCategories = (categories ?? []).filter((c) =>
-      variant === "income" ? c.is_income : !c.is_income
+      editType === "income" ? c.is_income : !c.is_income
     );
     return (
       <div className="border-b border-border/60 last:border-b-0 bg-accent/[0.03]">
         <div className={`grid ${GRID_COLS} gap-x-3 items-center px-3 h-9`}>
-          {/* Payee */}
+          {/* Payee + Type toggle */}
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+            <button
+              type="button"
+              onClick={() => { setEditType(editType === "income" ? "expense" : "income"); setEditCategoryId(""); }}
+              className={`text-[9px] font-bold px-1 py-px rounded cursor-pointer shrink-0 ${
+                editType === "income" ? "bg-success/15 text-success" : "bg-danger/15 text-danger"
+              }`}
+              title={`Switch to ${editType === "income" ? "expense" : "income"}`}
+            >
+              {editType === "income" ? "IN" : "EX"}
+            </button>
             <input
               ref={editRef}
               type="text"
@@ -452,7 +464,7 @@ function ItemRow({
               onChange={setEditCategoryId}
               categories={filteredCategories}
               variant="edit"
-              onCreateCategory={onCreateCategory ? (name) => onCreateCategory(name, variant === "income") : undefined}
+              onCreateCategory={onCreateCategory ? (name) => onCreateCategory(name, editType === "income") : undefined}
             />
           </div>
 

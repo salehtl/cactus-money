@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "../components/layout/PageHeader.tsx";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog.tsx";
 import { useToast } from "../components/ui/Toast.tsx";
@@ -11,6 +11,8 @@ import { PdfImportModal } from "../components/pdf-import/PdfImportModal.tsx";
 import { useCashflow } from "../hooks/useCashflow.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { useRecurring } from "../hooks/useRecurring.ts";
+import { useDb } from "../context/DbContext.tsx";
+import { getSetting, setSetting } from "../db/queries/settings.ts";
 import { getCurrentMonth } from "../lib/format.ts";
 import type { GroupBy } from "../lib/cashflow.ts";
 
@@ -19,12 +21,25 @@ export const Route = createFileRoute("/")({
 });
 
 function CashflowPage() {
+  const db = useDb();
   const { toast } = useToast();
   const [month, setMonth] = useState(getCurrentMonth);
-  const [groupBy, setGroupBy] = useState<GroupBy>("group_name");
+  const [groupBy, setGroupBy] = useState<GroupBy>("category");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+
+  // Load persisted groupBy on mount
+  useEffect(() => {
+    getSetting(db, "cashflow_group_by").then((v) => {
+      if (v) setGroupBy(v as GroupBy);
+    });
+  }, [db]);
+
+  function handleGroupByChange(value: GroupBy) {
+    setGroupBy(value);
+    setSetting(db, "cashflow_group_by", value);
+  }
 
   const { categories, add: addCategory } = useCategories();
   const { stopRecurrence } = useRecurring();
@@ -46,7 +61,7 @@ function CashflowPage() {
         month={month}
         onMonthChange={setMonth}
         groupBy={groupBy}
-        onGroupByChange={setGroupBy}
+        onGroupByChange={handleGroupByChange}
         onAddRow={() => setShowAddDialog(true)}
       >
         <PdfImportButton onFileSelect={setPdfFile} />
