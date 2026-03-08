@@ -98,18 +98,18 @@ function OverviewSummary({ transactions }: { transactions: TransactionWithCatego
   const net = totalIncome - totalExpenses;
 
   return (
-    <div className="grid grid-cols-3 gap-3 mb-4">
-      <div className="bg-surface rounded-xl border border-border p-4">
-        <p className="text-xs text-text-muted font-medium">Total Income</p>
-        <p className="text-lg font-bold mt-1 text-success tabular-nums">{formatCurrency(totalIncome)}</p>
+    <div className="flex items-stretch gap-3 overflow-x-auto mb-4">
+      <div className="flex-1 min-w-[100px] bg-surface rounded-xl border border-border p-3 sm:p-4">
+        <p className="text-[11px] sm:text-xs text-text-muted font-medium">Total Income</p>
+        <p className="text-base sm:text-lg font-bold mt-1 text-success tabular-nums">{formatCurrency(totalIncome)}</p>
       </div>
-      <div className="bg-surface rounded-xl border border-border p-4">
-        <p className="text-xs text-text-muted font-medium">Total Expenses</p>
-        <p className="text-lg font-bold mt-1 text-danger tabular-nums">{formatCurrency(totalExpenses)}</p>
+      <div className="flex-1 min-w-[100px] bg-surface rounded-xl border border-border p-3 sm:p-4">
+        <p className="text-[11px] sm:text-xs text-text-muted font-medium">Total Expenses</p>
+        <p className="text-base sm:text-lg font-bold mt-1 text-danger tabular-nums">{formatCurrency(totalExpenses)}</p>
       </div>
-      <div className="bg-surface rounded-xl border border-border p-4">
-        <p className="text-xs text-text-muted font-medium">Net</p>
-        <p className={`text-lg font-bold mt-1 tabular-nums ${net >= 0 ? "text-success" : "text-danger"}`}>{formatCurrency(net)}</p>
+      <div className="flex-1 min-w-[100px] bg-surface rounded-xl border border-border p-3 sm:p-4">
+        <p className="text-[11px] sm:text-xs text-text-muted font-medium">Net</p>
+        <p className={`text-base sm:text-lg font-bold mt-1 tabular-nums ${net >= 0 ? "text-success" : "text-danger"}`}>{formatCurrency(net)}</p>
       </div>
     </div>
   );

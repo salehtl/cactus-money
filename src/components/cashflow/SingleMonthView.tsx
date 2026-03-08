@@ -517,19 +517,30 @@ function ItemRow({
 
   // --- Display mode ---
   const isPlanned = row.status === "planned";
+  const secondaryInfo = [
+    formatDateShort(row.date),
+    row.categoryName,
+    row.frequency ? FREQUENCIES.find((f) => f.value === row.frequency)?.short : null,
+  ].filter(Boolean).join(" \u00b7 ");
 
   return (
     <div className="group border-b border-border/60 last:border-b-0">
-      <div onDoubleClick={startEditing} className={`grid ${GRID_COLS} gap-x-3 items-center px-3 h-9 hover:bg-surface-alt/50 transition-colors cursor-default`}>
+      <div onDoubleClick={startEditing} className={`grid ${GRID_COLS} gap-x-3 items-center px-3 py-1.5 sm:py-0 sm:h-9 hover:bg-surface-alt/50 transition-colors cursor-default`}>
         {/* Payee */}
         <div className="flex items-center gap-1.5 min-w-0">
           <span
             className="w-1.5 h-1.5 rounded-full shrink-0"
             style={{ backgroundColor: row.categoryColor ?? "var(--color-border-dark)" }}
           />
-          <span className={`text-[13px] truncate ${isPlanned ? "text-text-muted" : "text-text"}`}>
-            {row.label}
-          </span>
+          <div className="min-w-0">
+            <span className={`text-[13px] truncate block ${isPlanned ? "text-text-muted" : "text-text"}`}>
+              {row.label}
+            </span>
+            {/* Mobile secondary info: date, category, recur */}
+            <span className="text-[10px] text-text-light truncate block sm:hidden leading-tight">
+              {secondaryInfo}
+            </span>
+          </div>
         </div>
 
         {/* Date */}
@@ -573,7 +584,7 @@ function ItemRow({
         <div className="relative flex items-center justify-end gap-px" ref={menuRef}>
           <button
             onClick={startEditing}
-            className="p-1 rounded-md text-text-light hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            className="p-1 rounded-md text-text-light hover:text-accent sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
             title="Edit"
           >
             <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -582,7 +593,7 @@ function ItemRow({
           </button>
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-1 rounded-md text-text-light hover:text-text-muted opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            className="p-1 rounded-md text-text-light hover:text-text-muted sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="1" />
@@ -596,7 +607,7 @@ function ItemRow({
               {onDuplicateRow && (
                 <button
                   onClick={() => { onDuplicateRow(row); setMenuOpen(false); }}
-                  className="w-full text-left px-3 py-1.5 text-xs text-text-muted hover:bg-surface-alt hover:text-text transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 sm:py-1.5 text-xs text-text-muted hover:bg-surface-alt hover:text-text transition-colors cursor-pointer"
                 >
                   Duplicate
                 </button>
@@ -604,14 +615,14 @@ function ItemRow({
               {row.isRecurring && row.recurringId && onStopRecurrence && (
                 <button
                   onClick={() => { onStopRecurrence(row.recurringId!); setMenuOpen(false); }}
-                  className="w-full text-left px-3 py-1.5 text-xs text-text-muted hover:bg-surface-alt hover:text-text transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 sm:py-1.5 text-xs text-text-muted hover:bg-surface-alt hover:text-text transition-colors cursor-pointer"
                 >
                   Stop recurrence
                 </button>
               )}
               <button
                 onClick={() => { onDeleteRow(row.id); setMenuOpen(false); }}
-                className="w-full text-left px-3 py-1.5 text-xs text-danger hover:bg-danger-light/30 transition-colors cursor-pointer"
+                className="w-full text-left px-3 py-2 sm:py-1.5 text-xs text-danger hover:bg-danger-light/30 transition-colors cursor-pointer"
               >
                 Delete
               </button>

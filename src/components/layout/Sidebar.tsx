@@ -58,7 +58,7 @@ function SidebarLink({
 
 export function MobileNav() {
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 bg-surface border-t border-border z-40 flex">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 bg-surface/95 backdrop-blur-md border-t border-border z-40 flex safe-bottom">
       {navItems.map((item) => (
         <MobileNavItem key={item.to} {...item} />
       ))}
@@ -81,11 +81,14 @@ function MobileNavItem({
   return (
     <Link
       to={to}
-      className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors ${
-        isActive ? "text-accent" : "text-text-muted"
+      className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors relative ${
+        isActive ? "text-accent" : "text-text-muted active:text-text"
       }`}
     >
-      <Icon className="w-5 h-5" />
+      {isActive && (
+        <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-accent" />
+      )}
+      <Icon className={`w-5 h-5 transition-transform ${isActive ? "scale-105" : ""}`} />
       {label}
     </Link>
   );

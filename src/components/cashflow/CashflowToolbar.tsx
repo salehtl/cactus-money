@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-import { Button } from "../ui/Button.tsx";
 import { MonthPicker } from "../ui/MonthPicker.tsx";
 import { getCurrentMonth } from "../../lib/format.ts";
 import type { GroupBy } from "../../lib/cashflow.ts";
@@ -9,8 +7,6 @@ interface CashflowToolbarProps {
   onMonthChange: (month: string) => void;
   groupBy: GroupBy;
   onGroupByChange: (groupBy: GroupBy) => void;
-  onAddRow: () => void;
-  children?: ReactNode;
 }
 
 function stepMonth(month: string, delta: number): string {
@@ -24,8 +20,6 @@ export function CashflowToolbar({
   onMonthChange,
   groupBy,
   onGroupByChange,
-  onAddRow,
-  children,
 }: CashflowToolbarProps) {
   return (
     <div className="flex items-center gap-2 sm:gap-3 mb-4">
@@ -50,18 +44,19 @@ export function CashflowToolbar({
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
+        {/* Today — appears only when not on current month */}
+        {month !== getCurrentMonth() && (
+          <button
+            onClick={() => onMonthChange(getCurrentMonth())}
+            className="ml-1 px-2 py-1 rounded-lg text-[11px] font-medium text-accent border border-accent/20 hover:bg-accent/8 transition-colors cursor-pointer"
+            title="Go to current month"
+          >
+            Today
+          </button>
+        )}
       </div>
 
-      {/* Today — appears only when not on current month */}
-      {month !== getCurrentMonth() && (
-        <button
-          onClick={() => onMonthChange(getCurrentMonth())}
-          className="px-2 py-1 rounded-lg text-[11px] font-medium text-accent border border-accent/20 hover:bg-accent/8 transition-colors cursor-pointer"
-          title="Go to current month"
-        >
-          Today
-        </button>
-      )}
+      <div className="flex-1" />
 
       {/* Group by */}
       <div className="relative">
@@ -79,13 +74,6 @@ export function CashflowToolbar({
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </div>
-
-      <div className="flex-1" />
-
-      {children}
-      <Button size="sm" onClick={onAddRow}>
-        + Add
-      </Button>
     </div>
   );
 }

@@ -92,6 +92,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Prevent iOS double-tap zoom on interactive elements */
+button, a, select, input {
+  touch-action: manipulation;
+}
+
+/* Safe-area helpers for notched devices */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

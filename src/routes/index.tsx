@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { PageHeader } from "../components/layout/PageHeader.tsx";
+import { Button } from "../components/ui/Button.tsx";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog.tsx";
 import { useToast } from "../components/ui/Toast.tsx";
 import { CashflowToolbar } from "../components/cashflow/CashflowToolbar.tsx";
@@ -55,17 +56,24 @@ function CashflowPage() {
 
   return (
     <div>
-      <PageHeader title="Cashflow" />
+      <PageHeader
+        title="Cashflow"
+        action={
+          <div className="flex items-center gap-2">
+            <PdfImportButton onFilesSelect={setPdfFiles} />
+            <Button size="sm" onClick={() => setShowAddDialog(true)}>
+              + Add
+            </Button>
+          </div>
+        }
+      />
 
       <CashflowToolbar
         month={month}
         onMonthChange={setMonth}
         groupBy={groupBy}
         onGroupByChange={handleGroupByChange}
-        onAddRow={() => setShowAddDialog(true)}
-      >
-        <PdfImportButton onFilesSelect={setPdfFiles} />
-      </CashflowToolbar>
+      />
 
       {loading ? (
         <div className="flex items-center justify-center py-12">

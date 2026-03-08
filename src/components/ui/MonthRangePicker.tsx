@@ -144,15 +144,15 @@ export function MonthRangePicker({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 rounded-xl border border-border bg-surface shadow-lg animate-slide-up flex">
-          {/* Presets sidebar */}
-          <div className="border-r border-border p-2 space-y-0.5 w-[120px] shrink-0">
+        <div className="absolute top-full left-0 mt-1 z-50 rounded-xl border border-border bg-surface shadow-lg animate-slide-up flex flex-col sm:flex-row w-[260px] sm:w-auto">
+          {/* Presets — horizontal scroll on mobile, sidebar on desktop */}
+          <div className="sm:border-r border-b sm:border-b-0 border-border p-2 sm:space-y-0.5 sm:w-[120px] shrink-0 flex sm:block gap-1 overflow-x-auto">
             {presets.map((p) => (
               <button
                 key={p.label}
                 type="button"
                 onClick={() => applyPreset(p)}
-                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                className={`whitespace-nowrap sm:w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
                   activePreset?.label === p.label
                     ? "bg-accent/10 text-accent"
                     : "text-text-muted hover:text-text hover:bg-surface-alt"
@@ -164,7 +164,7 @@ export function MonthRangePicker({
           </div>
 
           {/* Calendar panel */}
-          <div className="w-[240px]">
+          <div className="sm:w-[240px]">
             {/* Picking indicator */}
             <div className="flex border-b border-border text-[11px] font-medium">
               <button

@@ -18,7 +18,7 @@ export function PdfImportButton({ onFilesSelect }: PdfImportButtonProps) {
         onClick={() => inputRef.current?.click()}
       >
         <svg
-          className="w-3.5 h-3.5 mr-1 inline-block"
+          className="w-3.5 h-3.5 sm:mr-1 inline-block"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -32,7 +32,7 @@ export function PdfImportButton({ onFilesSelect }: PdfImportButtonProps) {
           <line x1="9" y1="15" x2="12" y2="12" />
           <line x1="15" y1="15" x2="12" y2="12" />
         </svg>
-        Import Statement(s)
+        <span className="hidden sm:inline">Import Statement(s)</span>
       </Button>
       <input
         ref={inputRef}

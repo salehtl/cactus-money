@@ -15,8 +15,10 @@ function RootLayout() {
       <ToastProvider>
         <div className="flex min-h-screen">
           <Sidebar />
-          <main className="flex-1 min-w-0 p-4 md:p-6 pb-20 md:pb-6">
-            <Outlet />
+          <main className="flex-1 min-w-0 p-3 sm:p-4 md:p-6 pb-22 md:pb-6">
+            <div className="max-w-5xl mx-auto">
+              <Outlet />
+            </div>
           </main>
           <MobileNav />
           <AdminPanel />
