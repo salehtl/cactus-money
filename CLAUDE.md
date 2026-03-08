@@ -102,6 +102,18 @@ Progressive disclosure design — no modals:
 - Color palette hidden behind color swatch, click to reveal
 - Inline "Add category" at bottom of each group
 
+### Zakat Calculator (`src/routes/zakat.tsx`, `src/components/zakat/zakat-utils.ts`)
+
+Two-column desktop layout (form left, sticky breakdown right). Mobile: sticky bottom bar above nav with expandable breakdown.
+
+- **Live calculation:** No "Calculate" button — `useMemo` computes `preview` on every input change, breakdown is always visible.
+- **Calculation engine:** `zakat-utils.ts` — madhab-aware (Hanafi/Maliki/Shafi'i/Hanbali), supports simple + detailed modes.
+- **Stocks:** Trading (100% zakatable) vs hold (per-share, investment %, 25% shortcut). Detailed mode: granular per-stock positions via `HoldPosition[]`.
+- **Draft persistence:** sessionStorage (`zakat-draft`) with 400ms debounce. Restored on page load.
+- **History:** Stored in `settings` table as JSON (key: `zakat_history`). Includes `inputs` for reload.
+- **Save:** Creates expense transaction under `Donations > Zakat` category (auto-created if missing).
+- **Mobile bottom bar:** `fixed bottom-14 z-30` — sits above MobileNav (`fixed bottom-0 z-40`).
+
 ## Key Conventions
 
 - **Font:** TX-02 (OTF files in `public/fonts/`)
@@ -112,6 +124,7 @@ Progressive disclosure design — no modals:
 - **UI Components** (`src/components/ui/`): Button (variants: primary/secondary/danger/ghost), Input, Select, Modal, ConfirmDialog, MonthPicker, MonthRangePicker, Toast
 - **Icons:** Inline SVG components defined in component files (not using an icon library)
 - **Path alias:** `@/*` maps to `./src/*`
+- **Draft persistence:** sessionStorage with debounced writes (ref guard to skip initial write on load, `JSON.stringify` to save, `removeItem` on reset). Used in cashflow inline-add and zakat calculator.
 
 ## Important Config (vite.config.ts)
 
