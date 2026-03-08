@@ -3,7 +3,16 @@ import Anthropic from "@anthropic-ai/sdk";
 export interface AnthropicConfig {
   apiKey: string;
   proxyUrl: string;
+  model?: string;
 }
+
+export const AVAILABLE_MODELS = [
+  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", description: "Fastest, cheapest" },
+  { id: "claude-sonnet-4-6", label: "Sonnet 4.6", description: "Best balance (recommended)" },
+  { id: "claude-opus-4-6", label: "Opus 4.6", description: "Most capable, slowest" },
+] as const;
+
+export const DEFAULT_MODEL = "claude-sonnet-4-6";
 
 export type ImportErrorCode =
   | "no_api_key"
@@ -113,7 +122,6 @@ function makeClient(config: AnthropicConfig): Anthropic {
   });
 }
 
-const MODEL = "claude-haiku-4-5-20251001";
 
 /**
  * Stream a Claude response, calling onObject for each complete JSON object
@@ -129,7 +137,7 @@ export async function callClaudeStreaming(
 
   try {
     const stream = client.messages.stream({
-      model: MODEL,
+      model: config.model || DEFAULT_MODEL,
       max_tokens: 8192,
       system: systemPrompt,
       messages: [

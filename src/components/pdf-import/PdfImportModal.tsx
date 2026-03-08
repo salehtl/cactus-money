@@ -96,6 +96,8 @@ export function PdfImportModal({ open, onClose, file, categories }: PdfImportMod
 
         const proxyUrl =
           (await getSetting(db, "anthropic_proxy_url")) || "";
+        const model =
+          (await getSetting(db, "anthropic_model")) || "";
 
         setState({
           step: "processing",
@@ -105,7 +107,7 @@ export function PdfImportModal({ open, onClose, file, categories }: PdfImportMod
         const transactions = await parseStatement(
           file,
           categories,
-          { apiKey, proxyUrl },
+          { apiKey, proxyUrl, model },
           (progress) => {
             if (!isCurrent()) return;
             setState((prev) => {

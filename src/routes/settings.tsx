@@ -17,6 +17,7 @@ import {
   autoExport,
 } from "../lib/fs-sync.ts";
 import { getSetting, setSetting } from "../db/queries/settings.ts";
+import { AVAILABLE_MODELS, DEFAULT_MODEL } from "../lib/pdf-import/anthropic-client.ts";
 import { emitDbEvent } from "../lib/db-events.ts";
 import { useTheme } from "../hooks/useTheme.ts";
 
@@ -265,24 +266,29 @@ function AIIntegrationSection() {
   const { toast } = useToast();
   const [apiKey, setApiKey] = useState("");
   const [proxyUrl, setProxyUrl] = useState("");
+  const [model, setModel] = useState(DEFAULT_MODEL);
   const [savedKey, setSavedKey] = useState("");
   const [savedProxy, setSavedProxy] = useState("");
+  const [savedModel, setSavedModel] = useState(DEFAULT_MODEL);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     Promise.all([
       getSetting(db, "anthropic_api_key"),
       getSetting(db, "anthropic_proxy_url"),
-    ]).then(([key, url]) => {
+      getSetting(db, "anthropic_model"),
+    ]).then(([key, url, m]) => {
       setApiKey(key ?? "");
       setProxyUrl(url ?? "");
+      setModel(m || DEFAULT_MODEL);
       setSavedKey(key ?? "");
       setSavedProxy(url ?? "");
+      setSavedModel(m || DEFAULT_MODEL);
       setLoaded(true);
     });
   }, [db]);
 
-  const hasChanges = apiKey !== savedKey || proxyUrl !== savedProxy;
+  const hasChanges = apiKey !== savedKey || proxyUrl !== savedProxy || model !== savedModel;
 
   async function handleSave() {
     if (apiKey !== savedKey) {
@@ -292,6 +298,10 @@ function AIIntegrationSection() {
     if (proxyUrl !== savedProxy) {
       await setSetting(db, "anthropic_proxy_url", proxyUrl);
       setSavedProxy(proxyUrl);
+    }
+    if (model !== savedModel) {
+      await setSetting(db, "anthropic_model", model);
+      setSavedModel(model);
     }
     toast("Settings saved");
   }
@@ -315,6 +325,22 @@ function AIIntegrationSection() {
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="sk-ant-..."
           />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-text-muted mb-1">
+            Model
+          </label>
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent cursor-pointer"
+          >
+            {AVAILABLE_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label} — {m.description}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-text-muted mb-1">
