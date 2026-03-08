@@ -3,7 +3,6 @@ import { exportJSON } from "./export.ts";
 
 const DIR_HANDLE_KEY = "budget-app-dir-handle";
 let dirHandle: FileSystemDirectoryHandle | null = null;
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function isFileSystemAccessSupported(): boolean {
   return "showDirectoryPicker" in window;
@@ -62,13 +61,6 @@ export async function autoExport(db: DbClient): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-export function scheduleAutoExport(db: DbClient) {
-  if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    autoExport(db);
-  }, 5000);
 }
 
 // IndexedDB helpers for persisting the directory handle

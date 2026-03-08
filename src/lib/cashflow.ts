@@ -36,19 +36,6 @@ export interface CashflowSummary {
 
 // --- Helpers ---
 
-export function generateMonthRange(start: string, end: string): string[] {
-  const months: string[] = [];
-  const [sy, sm] = start.split("-").map(Number) as [number, number];
-  const [ey, em] = end.split("-").map(Number) as [number, number];
-  let y = sy, m = sm;
-  while (y < ey || (y === ey && m <= em)) {
-    months.push(`${y}-${String(m).padStart(2, "0")}`);
-    m++;
-    if (m > 12) { m = 1; y++; }
-  }
-  return months;
-}
-
 export function getCurrentMonth(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;

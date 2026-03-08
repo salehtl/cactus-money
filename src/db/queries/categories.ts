@@ -8,17 +8,6 @@ export async function getCategories(db: DbClient): Promise<Category[]> {
   return rows;
 }
 
-export async function getCategoryById(
-  db: DbClient,
-  id: string
-): Promise<Category | undefined> {
-  const { rows } = await db.exec<Category>(
-    "SELECT * FROM categories WHERE id = ?",
-    [id]
-  );
-  return rows[0];
-}
-
 export async function createCategory(
   db: DbClient,
   cat: {

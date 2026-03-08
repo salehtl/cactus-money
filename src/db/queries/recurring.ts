@@ -11,17 +11,6 @@ export async function getRecurringTransactions(
   return rows;
 }
 
-export async function getRecurringById(
-  db: DbClient,
-  id: string
-): Promise<RecurringTransaction | undefined> {
-  const { rows } = await db.exec<RecurringTransaction>(
-    "SELECT * FROM recurring_transactions WHERE id = ?",
-    [id]
-  );
-  return rows[0];
-}
-
 export async function createRecurring(
   db: DbClient,
   rec: {
