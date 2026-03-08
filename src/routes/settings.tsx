@@ -17,6 +17,7 @@ import {
   autoExport,
 } from "../lib/fs-sync.ts";
 import { getSetting, setSetting } from "../db/queries/settings.ts";
+import { getSeedSQL } from "../db/seed.ts";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "../lib/pdf-import/anthropic-client.ts";
 import { emitDbEvent } from "../lib/db-events.ts";
 import { useTheme } from "../hooks/useTheme.ts";
@@ -41,6 +42,7 @@ function SettingsPage() {
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [importData, setImportData] = useState<string | null>(null);
   const [showCSVExport, setShowCSVExport] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
     getSetting(db, "last_export").then(setLastExport);
@@ -114,6 +116,34 @@ function SettingsPage() {
     const newValue = !autoExportEnabled;
     await setSetting(db, "auto_export", String(newValue));
     setAutoExportEnabled(newValue);
+  }
+
+  async function handleClearAllData() {
+    try {
+      await db.exec("DELETE FROM transaction_tags;");
+      await db.exec("DELETE FROM tags;");
+      await db.exec("DELETE FROM transactions;");
+      await db.exec("DELETE FROM recurring_transactions;");
+      await db.exec("DELETE FROM budgets;");
+      await db.exec("DELETE FROM cashflow_items;");
+      await db.exec("DELETE FROM categories;");
+      await db.exec("DELETE FROM settings;");
+      // Re-seed default categories
+      const seedStatements = getSeedSQL().split("\n").filter(Boolean);
+      for (const stmt of seedStatements) {
+        await db.exec(stmt);
+      }
+      emitDbEvent("transactions-changed");
+      emitDbEvent("categories-changed");
+      emitDbEvent("recurring-changed");
+      emitDbEvent("settings-changed");
+      emitDbEvent("tags-changed");
+      setLastExport(null);
+      setAutoExportEnabled(false);
+      toast("All data cleared");
+    } catch {
+      toast("Failed to clear data", "error");
+    }
   }
 
   return (
@@ -216,6 +246,17 @@ function SettingsPage() {
         }}
       />
 
+      {/* Danger Zone */}
+      <section className="bg-surface rounded-xl border border-danger/30 p-4 mt-6">
+        <h2 className="text-sm font-bold text-danger mb-1">Danger Zone</h2>
+        <p className="text-xs text-text-muted mb-3">
+          Permanently delete all transactions, categories, tags, and settings. Default categories will be restored.
+        </p>
+        <Button variant="danger" size="sm" onClick={() => setShowClearConfirm(true)}>
+          Clear All Data
+        </Button>
+      </section>
+
       <ConfirmDialog
         open={showImportConfirm}
         onClose={() => {
@@ -226,6 +267,16 @@ function SettingsPage() {
         title="Import Data"
         message="This will replace ALL existing data with the imported backup. This cannot be undone. Continue?"
         confirmLabel="Import"
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        open={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={handleClearAllData}
+        title="Clear All Data"
+        message="This will permanently delete ALL your data — transactions, categories, tags, budgets, and settings. Default categories will be restored. This cannot be undone."
+        confirmLabel="Clear Everything"
         variant="danger"
       />
     </div>
