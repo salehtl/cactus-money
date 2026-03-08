@@ -329,9 +329,25 @@ function AIIntegrationSection() {
             Optional. Only set this if you use a custom proxy. Leave empty to call Anthropic directly.
           </p>
         </div>
-        <Button size="sm" onClick={handleSave} disabled={!hasChanges}>
-          Save
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={handleSave} disabled={!hasChanges}>
+            Save
+          </Button>
+          {savedKey && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={async () => {
+                await setSetting(db, "anthropic_api_key", "");
+                setApiKey("");
+                setSavedKey("");
+                toast("API key cleared");
+              }}
+            >
+              Clear Key
+            </Button>
+          )}
+        </div>
       </div>
     </section>
   );
