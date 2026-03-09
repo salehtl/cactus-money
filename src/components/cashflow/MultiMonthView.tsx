@@ -1,36 +1,7 @@
 import { useState } from "react";
 import { formatCurrency } from "../../lib/format.ts";
 import { getCurrentMonth } from "../../lib/cashflow.ts";
-
-interface CashflowCell {
-  amount: number;
-  isProjected: boolean;
-}
-
-interface CashflowRow {
-  id: string;
-  label: string;
-  type: "income" | "expense";
-  groupName: string;
-  categoryId: string | null;
-  categoryName: string | null;
-  categoryColor: string | null;
-  monthValues: Map<string, CashflowCell>;
-}
-
-interface CashflowGroup {
-  name: string;
-  categoryId: string | null;
-  rows: CashflowRow[];
-  monthTotals: Map<string, number>;
-}
-
-interface CashflowGrid {
-  months: string[];
-  incomeGroups: CashflowGroup[];
-  expenseGroups: CashflowGroup[];
-  monthTotals: Map<string, { income: number; expense: number; net: number }>;
-}
+import type { CashflowGrid } from "../../lib/cashflow.ts";
 
 interface MultiMonthViewProps {
   grid: CashflowGrid;

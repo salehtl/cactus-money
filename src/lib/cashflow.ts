@@ -34,6 +34,38 @@ export interface CashflowSummary {
   confirmedExpenses: number;
 }
 
+// --- Multi-month grid types (used by overview) ---
+
+export interface CashflowCell {
+  amount: number;
+  isProjected: boolean;
+}
+
+export interface CashflowGridRow {
+  id: string;
+  label: string;
+  type: "income" | "expense";
+  groupName: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryColor: string | null;
+  monthValues: Map<string, CashflowCell>;
+}
+
+export interface CashflowGridGroup {
+  name: string;
+  categoryId: string | null;
+  rows: CashflowGridRow[];
+  monthTotals: Map<string, number>;
+}
+
+export interface CashflowGrid {
+  months: string[];
+  incomeGroups: CashflowGridGroup[];
+  expenseGroups: CashflowGridGroup[];
+  monthTotals: Map<string, { income: number; expense: number; net: number }>;
+}
+
 // --- Helpers ---
 
 export function getCurrentMonth(): string {
