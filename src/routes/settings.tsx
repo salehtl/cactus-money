@@ -28,6 +28,8 @@ import {
 } from "../lib/pdf-import/providers/index.ts";
 import { emitDbEvent } from "../lib/db-events.ts";
 import { useTheme } from "../hooks/useTheme.ts";
+import { useChangelog } from "@/hooks/useChangelog";
+import { ChangelogModal } from "@/components/changelog/ChangelogModal";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -50,6 +52,8 @@ function SettingsPage() {
   const [importData, setImportData] = useState<string | null>(null);
   const [showCSVExport, setShowCSVExport] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
+  const { entries, latestVersion, markSeen } = useChangelog();
 
   useEffect(() => {
     getSetting(db, "last_export").then(setLastExport);
@@ -236,12 +240,29 @@ function SettingsPage() {
       <section className="bg-surface rounded-xl border border-border p-4">
         <h2 className="text-sm font-bold mb-3">About</h2>
         <div className="space-y-1.5 text-xs text-text-muted">
-          <p>Cactus Money v2.0.0</p>
+          <div className="flex items-center gap-2">
+            <p>Cactus Money v{latestVersion}</p>
+            <button
+              onClick={() => setShowChangelog(true)}
+              className="text-xs text-accent hover:underline cursor-pointer"
+            >
+              What's New
+            </button>
+          </div>
           <p>Storage: {db.storageType.toUpperCase()}</p>
           <p>Currency: AED (UAE Dirham)</p>
           <p>All data stored locally on this device.</p>
         </div>
       </section>
+
+      <ChangelogModal
+        open={showChangelog}
+        onClose={() => {
+          setShowChangelog(false);
+          markSeen();
+        }}
+        entries={entries}
+      />
 
       <CSVExportModal
         open={showCSVExport}

@@ -9,7 +9,7 @@ const navItems = [
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;
 
-export function Sidebar() {
+export function Sidebar({ settingsBadge }: { settingsBadge?: boolean }) {
   const { isDark } = useTheme();
   const logoSrc = isDark ? "/meta-media/logo-square-darkmode.svg" : "/meta-media/logo-square-lightmode.svg";
 
@@ -23,7 +23,7 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 p-2 space-y-0.5">
         {navItems.map((item) => (
-          <SidebarLink key={item.to} {...item} />
+          <SidebarLink key={item.to} {...item} showBadge={item.to === "/settings" && settingsBadge} />
         ))}
       </nav>
     </aside>
@@ -34,10 +34,12 @@ function SidebarLink({
   to,
   label,
   icon: Icon,
+  showBadge,
 }: {
   to: string;
   label: string;
   icon: React.FC<{ className?: string }>;
+  showBadge?: boolean;
 }) {
   const { pathname } = useLocation();
   const isActive = to === "/" ? pathname === "/" : pathname.startsWith(to);
@@ -51,17 +53,20 @@ function SidebarLink({
           : "text-text-muted hover:bg-surface-alt hover:text-text"
       }`}
     >
-      <Icon className="w-5 h-5" />
+      <span className="relative">
+        <Icon className="w-5 h-5" />
+        {showBadge && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent" />}
+      </span>
       {label}
     </Link>
   );
 }
 
-export function MobileNav() {
+export function MobileNav({ settingsBadge }: { settingsBadge?: boolean }) {
   return (
     <nav className="md:hidden fixed bottom-0 inset-x-0 bg-surface/95 backdrop-blur-md border-t border-border z-40 flex safe-bottom">
       {navItems.map((item) => (
-        <MobileNavItem key={item.to} {...item} />
+        <MobileNavItem key={item.to} {...item} showBadge={item.to === "/settings" && settingsBadge} />
       ))}
     </nav>
   );
@@ -71,10 +76,12 @@ function MobileNavItem({
   to,
   label,
   icon: Icon,
+  showBadge,
 }: {
   to: string;
   label: string;
   icon: React.FC<{ className?: string }>;
+  showBadge?: boolean;
 }) {
   const { pathname } = useLocation();
   const isActive = to === "/" ? pathname === "/" : pathname.startsWith(to);
@@ -89,7 +96,10 @@ function MobileNavItem({
       {isActive && (
         <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-accent" />
       )}
-      <Icon className={`w-5 h-5 transition-transform ${isActive ? "scale-105" : ""}`} />
+      <span className="relative">
+        <Icon className={`w-5 h-5 transition-transform ${isActive ? "scale-105" : ""}`} />
+        {showBadge && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent" />}
+      </span>
       {label}
     </Link>
   );
