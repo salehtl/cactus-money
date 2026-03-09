@@ -58,6 +58,7 @@ TanStack Router file-based routing in `src/routes/`. Auto-generates `routeTree.g
 - `__root.tsx` — Layout: wraps app with DbProvider, ToastProvider, Sidebar, MobileNav
 - `index.tsx` — Cashflow page (single-month view with inline add/edit)
 - `overview.tsx` — Multi-month overview with chart and pivot grid
+- `categories.tsx` — Category management with two-column layout
 - `settings.tsx`
 
 ### Custom Hooks (`src/hooks/`)
@@ -95,14 +96,14 @@ Pipeline: `PdfImportModal` → `parseStatement()` → `pdfToImages()` → `provi
 - **COEP constraint:** Cannot call LLM APIs directly from browser under COEP `require-corp`. Generic proxy in `vite.config.ts` routes `/api/llm/{provider}/*` to upstream APIs with streaming (piped, not buffered).
 - **Error handling:** HTTP status codes classified per provider via data-driven mappings. No technical details leaked to user.
 
-### Categories Settings (`src/routes/settings.tsx`)
+### Categories Page (`src/routes/categories.tsx`)
 
-Progressive disclosure design — no modals:
-- Collapsible Expense/Income groups with category counts
-- Expandable parent categories to reveal subcategories
+Two-column layout (Expense | Income side by side on desktop, stacked on mobile). Progressive disclosure design — no modals:
+- Each column is dedicated to one type (Expense or Income), replacing the old collapsible group approach
+- Parent categories default to collapsed; expandable to reveal subcategories
 - Click-to-edit inline (replaces row with form), Esc cancels
 - Color palette hidden behind color swatch, click to reveal
-- Inline "Add category" at bottom of each group
+- Inline "Add category" at bottom of each column
 
 ### Zakat Calculator (`src/routes/zakat.tsx`, `src/components/zakat/zakat-utils.ts`)
 

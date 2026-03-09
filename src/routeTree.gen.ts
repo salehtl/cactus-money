@@ -13,6 +13,7 @@ import { Route as ZakatRouteImport } from './routes/zakat'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RecurringRouteImport } from './routes/recurring'
 import { Route as OverviewRouteImport } from './routes/overview'
+import { Route as CategoriesRouteImport } from './routes/categories'
 import { Route as IndexRouteImport } from './routes/index'
 
 const ZakatRoute = ZakatRouteImport.update({
@@ -35,6 +36,11 @@ const OverviewRoute = OverviewRouteImport.update({
   path: '/overview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CategoriesRoute = CategoriesRouteImport.update({
+  id: '/categories',
+  path: '/categories',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -43,6 +49,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/categories': typeof CategoriesRoute
   '/overview': typeof OverviewRoute
   '/recurring': typeof RecurringRoute
   '/settings': typeof SettingsRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/categories': typeof CategoriesRoute
   '/overview': typeof OverviewRoute
   '/recurring': typeof RecurringRoute
   '/settings': typeof SettingsRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/categories': typeof CategoriesRoute
   '/overview': typeof OverviewRoute
   '/recurring': typeof RecurringRoute
   '/settings': typeof SettingsRoute
@@ -65,14 +74,28 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/overview' | '/recurring' | '/settings' | '/zakat'
+  fullPaths:
+    | '/'
+    | '/categories'
+    | '/overview'
+    | '/recurring'
+    | '/settings'
+    | '/zakat'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/overview' | '/recurring' | '/settings' | '/zakat'
-  id: '__root__' | '/' | '/overview' | '/recurring' | '/settings' | '/zakat'
+  to: '/' | '/categories' | '/overview' | '/recurring' | '/settings' | '/zakat'
+  id:
+    | '__root__'
+    | '/'
+    | '/categories'
+    | '/overview'
+    | '/recurring'
+    | '/settings'
+    | '/zakat'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CategoriesRoute: typeof CategoriesRoute
   OverviewRoute: typeof OverviewRoute
   RecurringRoute: typeof RecurringRoute
   SettingsRoute: typeof SettingsRoute
@@ -109,6 +132,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OverviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/categories': {
+      id: '/categories'
+      path: '/categories'
+      fullPath: '/categories'
+      preLoaderRoute: typeof CategoriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -121,6 +151,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CategoriesRoute: CategoriesRoute,
   OverviewRoute: OverviewRoute,
   RecurringRoute: RecurringRoute,
   SettingsRoute: SettingsRoute,
