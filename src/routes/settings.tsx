@@ -136,7 +136,6 @@ function SettingsPage() {
       await db.exec("DELETE FROM transactions;");
       await db.exec("DELETE FROM recurring_transactions;");
       await db.exec("DELETE FROM budgets;");
-      await db.exec("DELETE FROM cashflow_items;");
       await db.exec("DELETE FROM categories;");
       await db.exec("DELETE FROM settings;");
       // Re-seed default categories
