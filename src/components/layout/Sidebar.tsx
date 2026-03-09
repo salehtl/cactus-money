@@ -53,12 +53,18 @@ function SidebarLink({
           : "text-text-muted hover:bg-surface-alt hover:text-text"
       }`}
     >
-      <span className="relative">
-        <Icon className="w-5 h-5" />
-        {showBadge && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent" />}
-      </span>
+      <BadgeIcon icon={Icon} showBadge={showBadge} />
       {label}
     </Link>
+  );
+}
+
+function BadgeIcon({ icon: Icon, showBadge, className }: { icon: React.FC<{ className?: string }>; showBadge?: boolean; className?: string }) {
+  return (
+    <span className="relative">
+      <Icon className={className || "w-5 h-5"} />
+      {showBadge && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-danger" />}
+    </span>
   );
 }
 
@@ -96,10 +102,7 @@ function MobileNavItem({
       {isActive && (
         <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-accent" />
       )}
-      <span className="relative">
-        <Icon className={`w-5 h-5 transition-transform ${isActive ? "scale-105" : ""}`} />
-        {showBadge && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent" />}
-      </span>
+      <BadgeIcon icon={Icon} showBadge={showBadge} className={`w-5 h-5 transition-transform ${isActive ? "scale-105" : ""}`} />
       {label}
     </Link>
   );

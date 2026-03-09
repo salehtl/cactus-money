@@ -1,7 +1,7 @@
 import type { DbClient } from "../db/client.ts";
 import { exportJSON } from "./export.ts";
 
-const DIR_HANDLE_KEY = "budget-app-dir-handle";
+const DIR_HANDLE_KEY = "cactus-money-dir-handle";
 let dirHandle: FileSystemDirectoryHandle | null = null;
 
 export function isFileSystemAccessSupported(): boolean {
@@ -66,7 +66,7 @@ export async function autoExport(db: DbClient): Promise<boolean> {
 // IndexedDB helpers for persisting the directory handle
 function openIDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("budget-app-fs", 1);
+    const req = indexedDB.open("cactus-money-fs", 1);
     req.onupgradeneeded = () => {
       req.result.createObjectStore("handles");
     };
