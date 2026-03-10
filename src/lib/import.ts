@@ -22,12 +22,17 @@ export async function importRecurringJSON(db: DbClient, jsonString: string): Pro
     throw new Error("Invalid recurring backup — no recurring_transactions found");
   }
 
-  // Disable FK checks — imported category_ids may not exist in this DB yet
-  await db.exec("PRAGMA foreign_keys = OFF;");
+  // Resolve valid category_ids — null out any that don't exist in this DB
+  const { rows: cats } = await db.exec<{ id: string }>("SELECT id FROM categories");
+  const validCategoryIds = new Set(cats.map((r) => r.id));
+
   await db.exec("BEGIN TRANSACTION;");
   try {
     let count = 0;
     for (const rec of data.recurring_transactions) {
+      const categoryId = rec.category_id && validCategoryIds.has(rec.category_id as string)
+        ? rec.category_id
+        : null;
       await db.exec(
         `INSERT INTO recurring_transactions (id, amount, type, category_id, payee, notes, frequency, custom_interval_days, start_date, end_date, next_occurrence, mode, is_active, anchor_day, is_variable, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -42,7 +47,7 @@ export async function importRecurringJSON(db: DbClient, jsonString: string): Pro
           rec.id,
           rec.amount,
           rec.type,
-          rec.category_id ?? null,
+          categoryId,
           rec.payee ?? "",
           rec.notes ?? "",
           rec.frequency,
@@ -65,8 +70,6 @@ export async function importRecurringJSON(db: DbClient, jsonString: string): Pro
   } catch (e) {
     await db.exec("ROLLBACK;");
     throw e;
-  } finally {
-    await db.exec("PRAGMA foreign_keys = ON;");
   }
 }
 

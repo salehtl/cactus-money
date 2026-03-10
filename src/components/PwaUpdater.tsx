@@ -90,10 +90,7 @@ export function PwaUpdater() {
       </button>
       <button
         type="button"
-        onClick={() => {
-          updateFoundRef.current = false;
-          setNeedRefresh(false);
-        }}
+        onClick={() => setNeedRefresh(false)}
         className="p-1 rounded-md hover:bg-white/20 transition-colors cursor-pointer"
         aria-label="Dismiss"
       >
