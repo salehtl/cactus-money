@@ -9,7 +9,7 @@ import { useDb } from "../context/DbContext.tsx";
 import { useCategories } from "../hooks/useCategories.ts";
 import { exportJSON, exportRecurringJSON, downloadFile } from "../lib/export.ts";
 import { CSVExportModal } from "../components/CSVExportModal.tsx";
-import { importJSON } from "../lib/import.ts";
+import { importJSON, importRecurringJSON } from "../lib/import.ts";
 import {
   isFileSystemAccessSupported,
   pickDirectory,
@@ -81,6 +81,25 @@ function SettingsPage() {
     }
   }
 
+  function handleImportRecurring() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const count = await importRecurringJSON(db, text);
+        emitDbEvent("recurring-changed");
+        toast(`Imported ${count} recurring transaction${count === 1 ? "" : "s"}`);
+      } catch (e: any) {
+        toast(e.message || "Import failed", "error");
+      }
+    };
+    input.click();
+  }
+
   function handleImportSelect() {
     const input = document.createElement("input");
     input.type = "file";
@@ -146,7 +165,7 @@ function SettingsPage() {
       await db.exec("DELETE FROM categories;");
       await db.exec("DELETE FROM settings;");
       // Re-seed default categories
-      const seedStatements = getSeedSQL().split("\n").filter(Boolean);
+      const seedStatements = getSeedSQL().split(";").map(s => s.trim()).filter(Boolean);
       for (const stmt of seedStatements) {
         await db.exec(stmt);
       }
@@ -232,6 +251,9 @@ function SettingsPage() {
             </Button>
             <Button variant="secondary" size="sm" onClick={handleImportSelect}>
               Import JSON
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleImportRecurring}>
+              Import Recurring
             </Button>
           </div>
           {lastExport && (
