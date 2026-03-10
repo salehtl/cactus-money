@@ -1,5 +1,5 @@
 import type { DbClient } from "../db/client.ts";
-import { ANCHOR_DAY_FREQUENCIES } from "../db/schema.ts";
+import { ANCHOR_DAY_FREQUENCIES, SCHEMA_VERSION } from "../db/schema.ts";
 import { getRecurringTransactions } from "../db/queries/recurring.ts";
 
 export async function exportJSON(db: DbClient): Promise<string> {
@@ -13,7 +13,7 @@ export async function exportJSON(db: DbClient): Promise<string> {
     ]);
 
   const data = {
-    version: 3,
+    version: SCHEMA_VERSION,
     exported_at: new Date().toISOString(),
     categories: categories.rows,
     transactions: transactions.rows,
@@ -104,8 +104,8 @@ function csvEscape(value: string): string {
 }
 
 export function normalizeImportData(data: any): any {
-  if (data.version < 3) {
-    // Backfill anchor_day for old recurring rules
+  if (data.version < 4) {
+    // Backfill anchor_day and is_variable — added in schema v4 migration
     if (data.recurring_transactions) {
       for (const rule of data.recurring_transactions) {
         if (!rule.anchor_day && (ANCHOR_DAY_FREQUENCIES as readonly string[]).includes(rule.frequency)) {

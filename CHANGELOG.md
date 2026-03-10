@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.4.1] - 2026-03-11
+
+### Fixed
+- **Auto-export now actually triggers automatically**: The auto-export setting was saved but never acted on — data changes (transactions, categories, recurring) now trigger a debounced export to the linked directory when auto-export is enabled
+- **Auto-export toggle takes effect immediately**: Toggling auto-export on/off in Settings now propagates instantly without requiring a page reload
+- **Last export timestamp refreshes after background auto-export**: The "Last export" display in Settings now updates when an automatic export completes in the background
+- **Backup export version corrected**: Exported JSON now correctly reports the current schema version (4) instead of hardcoded 3, ensuring import normalization runs correctly on older backups
+
 ## [2.4.0] - 2026-03-11
 
 ### Added

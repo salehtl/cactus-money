@@ -6,6 +6,7 @@ import { AdminPanel } from "../components/AdminPanel.tsx";
 import { Onboarding } from "../components/Onboarding.tsx";
 import { useChangelog } from "../hooks/useChangelog.ts";
 import { PwaUpdater } from "../components/PwaUpdater.tsx";
+import { useAutoExport } from "../hooks/useAutoExport.ts";
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -23,6 +24,7 @@ function RootLayout() {
 
 function AppShell() {
   const { hasNew } = useChangelog();
+  useAutoExport();
 
   return (
     <div className="flex min-h-screen">

@@ -28,7 +28,7 @@ import {
   PROVIDER_RATE_LIMIT_URLS,
   getModelLabel,
 } from "../lib/pdf-import/providers/index.ts";
-import { emitDbEvent } from "../lib/db-events.ts";
+import { emitDbEvent, onDbEvent } from "../lib/db-events.ts";
 import { useTheme } from "../hooks/useTheme.ts";
 import { useChangelog } from "@/hooks/useChangelog";
 import { ChangelogModal } from "@/components/changelog/ChangelogModal";
@@ -53,9 +53,13 @@ function SettingsPage() {
   const { entries, latestVersion, hasNew, dismissed, markSeen, setDismissNotifications } = useChangelog();
 
   useEffect(() => {
-    getSetting(db, "last_export").then(setLastExport);
-    getSetting(db, "auto_export").then((v) => setAutoExportEnabled(v === "true"));
+    function refresh() {
+      getSetting(db, "last_export").then(setLastExport);
+      getSetting(db, "auto_export").then((v) => setAutoExportEnabled(v === "true"));
+    }
+    refresh();
     getStoredDirectory().then((h) => setHasDir(!!h));
+    return onDbEvent("settings-changed", refresh);
   }, [db]);
 
   async function handleExportJSON() {
@@ -153,6 +157,7 @@ function SettingsPage() {
     const newValue = !autoExportEnabled;
     await setSetting(db, "auto_export", String(newValue));
     setAutoExportEnabled(newValue);
+    emitDbEvent("settings-changed");
   }
 
   async function handleClearAllData() {
