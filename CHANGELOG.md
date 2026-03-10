@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.2] - 2026-03-10
+
+### Fixed
+- Recurring transactions duplicating in cashflow: race condition in event emission and non-atomic insert
+
+### Added
+- Export Recurring button in settings (JSON export of recurring transactions)
+
 ## [2.2.1] - 2026-03-10
 
 ### Fixed
