@@ -9,6 +9,7 @@ import type { LLMConfig } from "./llm-provider.ts";
 
 const PAGES_PER_BATCH = 5;
 const MAX_CONCURRENT = 3;
+const RATE_LIMIT_BACKOFF_MS = 2000;
 
 export interface ParseProgress {
   message: string;
@@ -186,16 +187,62 @@ export async function parseStatement(
     return batchTxns;
   }
 
-  // Run batches with max concurrency
-  const results: ParsedTransaction[][] = [];
-  for (let i = 0; i < batches.length; i += MAX_CONCURRENT) {
-    const chunk = batches.slice(i, i + MAX_CONCURRENT);
-    const chunkResults = await Promise.all(chunk.map(processBatch));
-    results.push(...chunkResults);
-  }
+  // Run batches with controlled concurrency, re-queuing rate-limited failures.
+  // On rate-limit, failed batches are spliced back into the queue and
+  // concurrency drops to 1 for the remainder of the import.
+  let rateLimited = false;
+  let i = 0;
 
-  for (const batch of results) {
-    allTransactions.push(...batch);
+  while (i < batches.length) {
+    if (!rateLimited) {
+      const chunk = batches.slice(i, i + MAX_CONCURRENT);
+      const settled = await Promise.allSettled(chunk.map(processBatch));
+      let failedIndices: number[] | undefined;
+
+      for (let j = 0; j < settled.length; j++) {
+        const r = settled[j];
+        if (r.status === "fulfilled") {
+          allTransactions.push(...r.value);
+        } else if (
+          r.reason instanceof ImportError &&
+          (r.reason.code === "rate_limited" || r.reason.code === "api_error")
+        ) {
+          (failedIndices ??= []).push(j);
+        } else {
+          throw r.reason;
+        }
+      }
+
+      i += chunk.length;
+
+      if (failedIndices) {
+        rateLimited = true;
+        // Re-insert failed batches at current position so the sequential
+        // path picks them up after a backoff delay
+        const failed = failedIndices.map((j) => chunk[j]);
+        batches.splice(i, 0, ...failed);
+        await new Promise((r) => setTimeout(r, RATE_LIMIT_BACKOFF_MS));
+      }
+    } else {
+      // Sequential path with backoff between retries
+      try {
+        const result = await processBatch(batches[i]);
+        allTransactions.push(...result);
+      } catch (e) {
+        if (
+          e instanceof ImportError &&
+          (e.code === "rate_limited" || e.code === "api_error")
+        ) {
+          await new Promise((r) => setTimeout(r, RATE_LIMIT_BACKOFF_MS));
+          // Retry once more; if it fails again, let it propagate
+          const result = await processBatch(batches[i]);
+          allTransactions.push(...result);
+        } else {
+          throw e;
+        }
+      }
+      i++;
+    }
   }
 
   // Step 3: Deduplicate (category IDs already resolved during streaming)
