@@ -1,5 +1,6 @@
 import type { DbClient } from "../client.ts";
 import type { Transaction } from "../../types/database.ts";
+import { SET_UPDATED_AT } from "../schema.ts";
 
 export interface TransactionWithCategory extends Transaction {
   category_name: string | null;
@@ -92,7 +93,7 @@ export async function updateTransaction(
   }
 
   if (sets.length === 0) return;
-  sets.push("updated_at = datetime('now')");
+  sets.push(SET_UPDATED_AT);
   params.push(id);
 
   await db.exec(

@@ -10,6 +10,9 @@ export const BACKUP_TABLES = [
 
 export const ANCHOR_DAY_FREQUENCIES = ["monthly", "quarterly", "yearly"] as const;
 
+/** SQL fragment appended to dynamic UPDATE SET clauses to touch updated_at. */
+export const SET_UPDATED_AT = "updated_at = datetime('now')" as const;
+
 export const CREATE_TABLES = `
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,

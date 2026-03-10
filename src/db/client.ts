@@ -1,5 +1,8 @@
 import type { DbWorkerRequest, DbWorkerResponse } from "../types/worker.ts";
 
+/** Sentinel ID used by the worker to signal init-ready / init-error. */
+export const WORKER_INIT_ID = -1 as const;
+
 export class DbClient {
   private worker: Worker;
   private nextId = 1;
@@ -18,7 +21,7 @@ export class DbClient {
 
     this.readyPromise = new Promise((resolve, reject) => {
       const handler = (event: MessageEvent<DbWorkerResponse>) => {
-        if (event.data.id === -1) {
+        if (event.data.id === WORKER_INIT_ID) {
           if (event.data.type === "ready") {
             this._storageType = event.data.storageType ?? "unknown";
             resolve(this._storageType);

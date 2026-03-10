@@ -4,6 +4,7 @@ import { IDBBatchAtomicVFS } from "wa-sqlite/src/examples/IDBBatchAtomicVFS.js";
 import { OPFSCoopSyncVFS } from "wa-sqlite/src/examples/OPFSCoopSyncVFS.js";
 import { CREATE_TABLES, SCHEMA_VERSION, MIGRATIONS, BACKUP_TABLES } from "../src/db/schema.ts";
 import { getSeedSQL } from "../src/db/seed.ts";
+import { WORKER_INIT_ID } from "../src/db/client.ts";
 import type { DbWorkerRequest, DbWorkerResponse } from "../src/types/worker.ts";
 
 let sqlite3: any;
@@ -163,11 +164,11 @@ self.addEventListener("message", async (event: MessageEvent<DbWorkerRequest>) =>
 initPromise
   .then((st) => {
     ready = true;
-    self.postMessage({ id: -1, type: "ready", storageType: st } satisfies DbWorkerResponse);
+    self.postMessage({ id: WORKER_INIT_ID, type: "ready", storageType: st } satisfies DbWorkerResponse);
   })
   .catch((e) => {
     self.postMessage({
-      id: -1,
+      id: WORKER_INIT_ID,
       type: "error",
       error: e.message,
     } satisfies DbWorkerResponse);

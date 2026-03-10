@@ -1,5 +1,6 @@
 import type { DbClient } from "../client.ts";
 import type { Category } from "../../types/database.ts";
+import { SET_UPDATED_AT } from "../schema.ts";
 
 export async function getCategories(db: DbClient): Promise<Category[]> {
   const { rows } = await db.exec<Category>(
@@ -76,7 +77,7 @@ export async function updateCategory(
   }
 
   if (sets.length === 0) return;
-  sets.push("updated_at = datetime('now')");
+  sets.push(SET_UPDATED_AT);
   params.push(id);
 
   await db.exec(

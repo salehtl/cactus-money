@@ -1,7 +1,7 @@
 import type { DbClient } from "../client.ts";
 import type { RecurringTransaction } from "../../types/database.ts";
 import { getNextOccurrence, formatLocalDate } from "../../lib/recurring.ts";
-import { ANCHOR_DAY_FREQUENCIES } from "../schema.ts";
+import { ANCHOR_DAY_FREQUENCIES, SET_UPDATED_AT } from "../schema.ts";
 import { createTransaction } from "./transactions.ts";
 
 export async function getRecurringTransactions(
@@ -108,7 +108,7 @@ export async function updateRecurring(
   }
 
   if (sets.length === 0) return;
-  sets.push("updated_at = datetime('now')");
+  sets.push(SET_UPDATED_AT);
   params.push(id);
 
   await db.exec(
