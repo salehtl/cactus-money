@@ -342,6 +342,7 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
           fallbackModel={state.fallbackModel}
           provider={state.provider}
           onSwitchModel={() => {
+            if (!state.fallbackModel) return;
             setSetting(db, "llm_model", state.fallbackModel).then(() => {
               toast(`Switched to ${getModelLabel(state.provider, state.fallbackModel)}`);
               setState({ step: "idle" });
