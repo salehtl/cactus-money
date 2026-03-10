@@ -275,7 +275,7 @@ export async function parseStatement(
       // so retries skip re-emitting them.
       const batch = batches[i];
       let succeeded = false;
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         const skipEmit = attempt > 0 ? lastEmitted : 0;
         try {
           commitBatch((await processBatch(batch, skipEmit)).txns);
@@ -283,7 +283,7 @@ export async function parseStatement(
           break;
         } catch (e) {
           if (!isRetryable(e)) throw e;
-          if (attempt === MAX_RETRIES) {
+          if (attempt === MAX_ATTEMPTS - 1) {
             throw new ImportError(
               "rate_limited_with_fallback",
               "Rate Limited",

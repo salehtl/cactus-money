@@ -477,8 +477,7 @@ function FileQueueView({
 
       {/* Privacy notice */}
       <p className="text-[11px] text-text-muted mb-4">
-        Your statement data will be sent to Anthropic for processing.{" "}
-        <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener noreferrer" className="underline">Privacy Policy</a>
+        Your statement data will be sent to your configured AI provider for processing.
       </p>
 
       {/* Actions */}
