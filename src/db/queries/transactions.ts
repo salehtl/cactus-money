@@ -54,6 +54,7 @@ export async function updateTransaction(
     notes?: string;
     status?: "planned" | "confirmed" | "review";
     group_name?: string;
+    recurring_id?: string | null;
   }
 ): Promise<void> {
   const sets: string[] = [];
@@ -90,6 +91,10 @@ export async function updateTransaction(
   if (updates.group_name !== undefined) {
     sets.push("group_name = ?");
     params.push(updates.group_name);
+  }
+  if (updates.recurring_id !== undefined) {
+    sets.push("recurring_id = ?");
+    params.push(updates.recurring_id);
   }
 
   if (sets.length === 0) return;
@@ -133,5 +138,41 @@ export async function updateTransactionsBatch(
   const placeholders = ids.map(() => "?").join(",");
   params.push(...ids);
   await db.exec(`UPDATE transactions SET ${sets.join(", ")} WHERE id IN (${placeholders})`, params);
+}
+
+/** Delete all future planned/review instances of a recurring rule after a given date (exclusive). */
+export async function deleteFutureInstancesOfRule(
+  db: DbClient,
+  recurringId: string,
+  afterDate: string
+): Promise<void> {
+  await db.exec(
+    `DELETE FROM transactions WHERE recurring_id = ? AND status IN ('planned', 'review') AND date > ?`,
+    [recurringId, afterDate]
+  );
+}
+
+/** Bulk-update fields on future planned/review instances of a recurring rule. */
+export async function updateFutureInstancesOfRule(
+  db: DbClient,
+  recurringId: string,
+  afterDate: string,
+  updates: { amount?: number; payee?: string; category_id?: string | null }
+): Promise<void> {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+
+  if (updates.amount !== undefined) { sets.push("amount = ?"); params.push(updates.amount); }
+  if (updates.payee !== undefined) { sets.push("payee = ?"); params.push(updates.payee); }
+  if (updates.category_id !== undefined) { sets.push("category_id = ?"); params.push(updates.category_id); }
+
+  if (sets.length === 0) return;
+  sets.push(SET_UPDATED_AT);
+  params.push(recurringId, afterDate);
+
+  await db.exec(
+    `UPDATE transactions SET ${sets.join(", ")} WHERE recurring_id = ? AND status IN ('planned', 'review') AND date > ?`,
+    params
+  );
 }
 

@@ -77,10 +77,40 @@ export async function updateRecurring(
     next_occurrence: string;
     mode: "reminder" | "auto";
     is_active: boolean;
+    anchor_day: number | null;
   }>
 ): Promise<void> {
   const sets: string[] = [];
   const params: unknown[] = [];
+
+  // When frequency or start_date changes, recompute anchor_day automatically
+  // unless the caller already provides an explicit anchor_day
+  if ((updates.frequency !== undefined || updates.start_date !== undefined) && updates.anchor_day === undefined) {
+    const { rows } = await db.exec<{ frequency: string; start_date: string; next_occurrence: string }>(
+      "SELECT frequency, start_date, next_occurrence FROM recurring_transactions WHERE id = ?",
+      [id]
+    );
+    if (rows[0]) {
+      const newFreq = updates.frequency ?? rows[0].frequency;
+      const newStart = updates.start_date ?? rows[0].start_date;
+      updates = {
+        ...updates,
+        anchor_day: (ANCHOR_DAY_FREQUENCIES as readonly string[]).includes(newFreq)
+          ? parseInt(newStart.slice(8, 10), 10)
+          : null,
+      };
+      // Also recompute next_occurrence from today when frequency changes (unless explicitly provided)
+      if (updates.frequency !== undefined && updates.next_occurrence === undefined) {
+        const today = formatLocalDate(new Date());
+        let occ = rows[0].next_occurrence;
+        // Advance from current next_occurrence until we're at/after today
+        while (occ < today) {
+          occ = getNextOccurrence(occ, newFreq as RecurringTransaction["frequency"], updates.anchor_day, updates.custom_interval_days ?? null);
+        }
+        updates = { ...updates, next_occurrence: occ };
+      }
+    }
+  }
 
   const fields = [
     "amount",
@@ -94,6 +124,7 @@ export async function updateRecurring(
     "end_date",
     "next_occurrence",
     "mode",
+    "anchor_day",
   ] as const;
 
   for (const field of fields) {

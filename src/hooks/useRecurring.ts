@@ -7,8 +7,13 @@ import {
   deleteRecurring,
   processRecurringRuleById,
 } from "../db/queries/recurring.ts";
+import {
+  deleteFutureInstancesOfRule,
+  updateFutureInstancesOfRule,
+} from "../db/queries/transactions.ts";
 import { emitDbEvent, onDbEvent } from "../lib/db-events.ts";
 import { formatLocalDate } from "../lib/recurring.ts";
+import { getToday } from "../lib/format.ts";
 import type { RecurringTransaction } from "../types/database.ts";
 
 export function useRecurring() {
@@ -85,11 +90,61 @@ export function useRecurring() {
 
   const stopRecurrence = useCallback(
     async (recurringId: string) => {
+      const today = getToday();
       await updateRecurring(db, recurringId, { is_active: false });
+      await deleteFutureInstancesOfRule(db, recurringId, today);
       emitDbEvent("recurring-changed");
+      emitDbEvent("transactions-changed");
     },
     [db]
   );
 
-  return { items, loading, add, update, remove, stopRecurrence, refresh };
+  /**
+   * Update a recurring rule and sync future planned/review instances.
+   * For frequency/start_date/end_date changes, deletes + regenerates future instances.
+   * For payee/amount/category changes, bulk-updates existing future instances.
+   */
+  const updateRuleAndSync = useCallback(
+    async (ruleId: string, updates: Parameters<typeof updateRecurring>[2]) => {
+      const today = getToday();
+      const isScheduleChange =
+        updates.frequency !== undefined ||
+        updates.start_date !== undefined ||
+        updates.end_date !== undefined;
+
+      await updateRecurring(db, ruleId, updates);
+
+      if (isScheduleChange) {
+        // Delete future instances and regenerate under new schedule
+        await deleteFutureInstancesOfRule(db, ruleId, today);
+        await processRecurringRuleById(db, ruleId, today);
+      } else {
+        // Sync scalar fields on future instances
+        const instanceUpdates: Parameters<typeof updateFutureInstancesOfRule>[3] = {};
+        if (updates.amount !== undefined) instanceUpdates.amount = updates.amount;
+        if (updates.payee !== undefined) instanceUpdates.payee = updates.payee;
+        if (updates.category_id !== undefined) instanceUpdates.category_id = updates.category_id;
+        if (Object.keys(instanceUpdates).length > 0) {
+          await updateFutureInstancesOfRule(db, ruleId, today, instanceUpdates);
+        }
+      }
+
+      emitDbEvent("recurring-changed");
+      emitDbEvent("transactions-changed");
+    },
+    [db]
+  );
+
+  const resumeRecurrence = useCallback(
+    async (recurringId: string) => {
+      const today = getToday();
+      await updateRecurring(db, recurringId, { is_active: true });
+      const count = await processRecurringRuleById(db, recurringId, today);
+      emitDbEvent("recurring-changed");
+      if (count > 0) emitDbEvent("transactions-changed");
+    },
+    [db]
+  );
+
+  return { items, loading, add, update, remove, stopRecurrence, resumeRecurrence, updateRuleAndSync, refresh };
 }

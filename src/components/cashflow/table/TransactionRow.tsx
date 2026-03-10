@@ -26,6 +26,8 @@ interface TransactionRowProps {
   onDeleteRow: (id: string) => void;
   onDuplicateRow?: (row: CashflowRow) => void;
   onStopRecurrence?: (recurringId: string) => void;
+  onAttachRecurrence?: (txnId: string, row: CashflowRow, frequency: import("../../../types/database.ts").RecurringTransaction["frequency"]) => void;
+  onUpdateRecurringFrequency?: (recurringId: string, frequency: import("../../../types/database.ts").RecurringTransaction["frequency"]) => void;
   onCreateCategory?: (name: string) => Promise<string>;
 }
 
@@ -43,6 +45,8 @@ export const TransactionRow = memo(function TransactionRow({
   onDeleteRow,
   onDuplicateRow,
   onStopRecurrence,
+  onAttachRecurrence,
+  onUpdateRecurringFrequency,
   onCreateCategory,
 }: TransactionRowProps) {
   const isPlanned = row.status === "planned" || row.status === "review";
@@ -158,11 +162,22 @@ export const TransactionRow = memo(function TransactionRow({
           isEditing={editingCol === COLUMN_INDEX.frequency}
           onStartEdit={() => startEditCell(COLUMN_INDEX.frequency)}
           onCommit={(v) => {
-            if (v === null && row.recurringId && onStopRecurrence) {
-              dispatch({ type: "COMMIT_CELL" });
-              onStopRecurrence(row.recurringId);
+            dispatch({ type: "COMMIT_CELL" });
+            if (v === null) {
+              // None selected — stop and purge if currently recurring
+              if (row.recurringId && onStopRecurrence) {
+                onStopRecurrence(row.recurringId);
+              }
+            } else if (row.recurringId) {
+              // Already has a rule — change frequency
+              if (onUpdateRecurringFrequency) {
+                onUpdateRecurringFrequency(row.recurringId, v as import("../../../types/database.ts").RecurringTransaction["frequency"]);
+              }
             } else {
-              commitCell("frequency", v);
+              // One-time transaction — attach a new rule
+              if (onAttachRecurrence) {
+                onAttachRecurrence(row.id, row, v as import("../../../types/database.ts").RecurringTransaction["frequency"]);
+              }
             }
           }}
           onCancel={cancelCell}

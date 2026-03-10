@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from "react";
 import type { CashflowGroup, CashflowRow, CashflowSummary } from "../../lib/cashflow.ts";
 import type { Category, RecurringTransaction } from "../../types/database.ts";
+
 import { SummaryStrip } from "./SummaryStrip.tsx";
 import { ReviewBanner } from "./ReviewBanner.tsx";
 import { TransactionTable } from "./table/TransactionTable.tsx";
@@ -33,6 +34,8 @@ export interface SingleMonthViewProps {
   }) => void | Promise<void>;
   onDuplicateRow?: (row: CashflowRow) => void;
   onCreateCategory?: (name: string, isIncome: boolean) => Promise<string>;
+  onAttachRecurrence?: (txnId: string, row: CashflowRow, frequency: RecurringTransaction["frequency"]) => void;
+  onUpdateRecurringFrequency?: (recurringId: string, frequency: RecurringTransaction["frequency"]) => void;
   onBulkDeleteRows: (ids: string[]) => void | Promise<void>;
   onBulkEditRows: (ids: string[], updates: { status?: "planned" | "confirmed"; category_id?: string | null }) => void | Promise<void>;
 }
@@ -50,6 +53,8 @@ export function SingleMonthView({
   onAddRow,
   onDuplicateRow,
   onCreateCategory,
+  onAttachRecurrence,
+  onUpdateRecurringFrequency,
   onBulkDeleteRows,
   onBulkEditRows,
 }: SingleMonthViewProps) {
@@ -114,6 +119,8 @@ export function SingleMonthView({
         onAddRow={onAddRow}
         onDuplicateRow={onDuplicateRow}
         onCreateCategory={onCreateCategory}
+        onAttachRecurrence={onAttachRecurrence}
+        onUpdateRecurringFrequency={onUpdateRecurringFrequency}
         onSelectionChange={handleIncomeSelection}
         clearSelectionSignal={clearIncomeSig}
       />
@@ -132,6 +139,8 @@ export function SingleMonthView({
         onAddRow={onAddRow}
         onDuplicateRow={onDuplicateRow}
         onCreateCategory={onCreateCategory}
+        onAttachRecurrence={onAttachRecurrence}
+        onUpdateRecurringFrequency={onUpdateRecurringFrequency}
         onSelectionChange={handleExpenseSelection}
         clearSelectionSignal={clearExpenseSig}
       />

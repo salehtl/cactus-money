@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.4.0] - 2026-03-11
+
+### Added
+- **Recurring scope modal**: Editing Payee, Amount, or Date on a recurring transaction now shows a prompt — "Just this one" updates only the selected instance, "Update all future" syncs the rule template and all future planned/review instances
+- **Recur column — attach recurrence**: Selecting a frequency on a one-time (standalone) transaction creates a new recurring rule and links the transaction as its first instance
+- **Recur column — change frequency**: Changing the frequency on an existing recurring transaction updates the rule, recomputes the schedule, and regenerates future instances under the new frequency
+- **Resume catches up missed occurrences**: Resuming a paused recurring rule now runs the scheduler to catch up any occurrences that were missed while paused
+- `deleteFutureInstancesOfRule` and `updateFutureInstancesOfRule` DB query helpers for managing recurring instance lifecycle
+
+### Fixed
+- **Stop recurrence now purges future instances**: Stopping a recurrence (via Recur → None or Actions → Stop recurrence) now also deletes all future `planned` and `review` instances, not just deactivates the rule
+- Editing frequency or start/end date on the Recurring page now deletes stale future instances and regenerates them under the correct new schedule
+- Editing Payee, Amount, or Category on the Recurring page now syncs all future planned/review instances automatically (no prompt needed on the Recurring page — changes are always authoritative)
+- `updateTransaction` now supports updating `recurring_id` (needed to link a transaction to a newly created rule)
+
 ## [2.3.3] - 2026-03-10
 
 ### Fixed

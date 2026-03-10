@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { PageHeader } from "../components/layout/PageHeader.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog.tsx";
+import { RecurringScopeModal } from "../components/ui/RecurringScopeModal.tsx";
 import { useToast } from "../components/ui/Toast.tsx";
 import { CashflowToolbar } from "../components/cashflow/CashflowToolbar.tsx";
 import { SingleMonthView } from "../components/cashflow/SingleMonthView.tsx";
@@ -11,15 +12,24 @@ import { PdfImportButton } from "../components/pdf-import/PdfImportButton.tsx";
 import { PdfImportModal } from "../components/pdf-import/PdfImportModal.tsx";
 import { useCashflow } from "../hooks/useCashflow.ts";
 import { useCategories } from "../hooks/useCategories.ts";
-import { useRecurring } from "../hooks/useRecurring.ts";
 import { useDb } from "../context/DbContext.tsx";
 import { getSetting, setSetting } from "../db/queries/settings.ts";
-import { getCurrentMonth } from "../lib/format.ts";
+import { getCurrentMonth, formatCurrency } from "../lib/format.ts";
 import type { GroupBy } from "../lib/cashflow.ts";
 
 export const Route = createFileRoute("/")({
   component: CashflowPage,
 });
+
+// Pending recurring edit state
+interface PendingRecurringEdit {
+  txnId: string;
+  recurringId: string;
+  field: "payee" | "amount" | "date" | "category_id";
+  oldValue: string;   // display string for modal
+  newValue: string;   // display string for modal
+  rawValue: unknown;  // actual new value for DB
+}
 
 function CashflowPage() {
   const db = useDb();
@@ -29,6 +39,7 @@ function CashflowPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [pdfFiles, setPdfFiles] = useState<File[] | null>(null);
+  const [pendingRecurringEdit, setPendingRecurringEdit] = useState<PendingRecurringEdit | null>(null);
 
   // Load persisted groupBy on mount
   useEffect(() => {
@@ -43,7 +54,6 @@ function CashflowPage() {
   }
 
   const { categories, add: addCategory } = useCategories();
-  const { stopRecurrence } = useRecurring();
   const {
     incomeGroups,
     expenseGroups,
@@ -54,6 +64,10 @@ function CashflowPage() {
     removeTransaction,
     removeTransactions,
     bulkEditTransactions,
+    stopAndPurgeRecurrence,
+    attachRecurrence,
+    updateRecurringFrequency,
+    editRecurringInstance,
   } = useCashflow(month, groupBy);
 
   return (
@@ -98,10 +112,35 @@ function CashflowPage() {
           }}
           onDeleteRow={(id) => setDeleteTarget(id)}
           onStopRecurrence={async (recurringId) => {
-            await stopRecurrence(recurringId);
+            await stopAndPurgeRecurrence(recurringId);
             toast("Recurrence stopped");
           }}
           onEditRow={async (id, updates) => {
+            // Scope-sensitive fields on recurring instances show a modal
+            const scopeFields = ["payee", "amount", "date"] as const;
+            const scopeField = scopeFields.find((f) => f in updates);
+            if (scopeField) {
+              const { rows } = await db.exec<{ recurring_id: string | null; [k: string]: unknown }>(
+                "SELECT recurring_id, payee, amount, date FROM transactions WHERE id = ?",
+                [id]
+              );
+              const row = rows[0];
+              if (row?.recurring_id) {
+                const recurringId = row.recurring_id;
+                const rawValue = updates[scopeField as keyof typeof updates];
+                const formatVal = (f: string, v: unknown) =>
+                  f === "amount" ? formatCurrency(v as number) : String(v);
+                setPendingRecurringEdit({
+                  txnId: id,
+                  recurringId,
+                  field: scopeField,
+                  oldValue: formatVal(scopeField, row[scopeField]),
+                  newValue: formatVal(scopeField, rawValue),
+                  rawValue,
+                });
+                return;
+              }
+            }
             await editTransaction(id, updates);
             toast("Updated");
           }}
@@ -136,6 +175,14 @@ function CashflowPage() {
               group_name: row.groupName,
             });
             toast("Transaction duplicated");
+          }}
+          onAttachRecurrence={async (txnId, row, frequency) => {
+            await attachRecurrence(txnId, row, frequency);
+            toast("Recurring rule created");
+          }}
+          onUpdateRecurringFrequency={async (recurringId, frequency) => {
+            await updateRecurringFrequency(recurringId, frequency);
+            toast("Frequency updated");
           }}
           onBulkDeleteRows={async (ids) => {
             await removeTransactions(ids);
@@ -191,6 +238,28 @@ function CashflowPage() {
           onClose={() => setPdfFiles(null)}
           files={pdfFiles}
           categories={categories}
+        />
+      )}
+
+      {pendingRecurringEdit && (
+        <RecurringScopeModal
+          open={true}
+          fieldLabel={pendingRecurringEdit.field === "category_id" ? "Category" : pendingRecurringEdit.field.charAt(0).toUpperCase() + pendingRecurringEdit.field.slice(1)}
+          fromValue={pendingRecurringEdit.oldValue}
+          toValue={pendingRecurringEdit.newValue}
+          onCancel={() => setPendingRecurringEdit(null)}
+          onJustThis={async () => {
+            const p = pendingRecurringEdit;
+            setPendingRecurringEdit(null);
+            await editRecurringInstance(p.txnId, p.recurringId, p.field, p.rawValue, "one");
+            toast("Updated");
+          }}
+          onAllFuture={async () => {
+            const p = pendingRecurringEdit;
+            setPendingRecurringEdit(null);
+            await editRecurringInstance(p.txnId, p.recurringId, p.field, p.rawValue, "all");
+            toast("Updated all future");
+          }}
         />
       )}
     </div>
