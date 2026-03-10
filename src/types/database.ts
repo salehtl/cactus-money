@@ -59,6 +59,8 @@ export interface RecurringTransaction {
   next_occurrence: string;
   mode: "reminder" | "auto";
   is_active: number;
+  anchor_day: number | null;
+  is_variable: number;
   created_at: string;
   updated_at: string;
 }
