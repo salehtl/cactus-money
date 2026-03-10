@@ -65,7 +65,7 @@ Simple EventTarget pub/sub for cross-hook cache invalidation. Event types: `tran
 
 TanStack Router file-based routing in `src/routes/`. Auto-generates `routeTree.gen.ts` via plugin. Each route exports via `createFileRoute()`.
 
-- `__root.tsx` — Layout: wraps app with DbProvider, ToastProvider, Sidebar, MobileNav
+- `__root.tsx` — Layout: wraps app with DbProvider, ToastProvider, Sidebar, MobileNav, PwaUpdater
 - `index.tsx` — Cashflow page (single-month view with inline add/edit)
 - `overview.tsx` — Multi-month overview with Summary (KPIs, charts) and Detailed (pivot grid) tabs
 - `categories.tsx` — Category management with two-column layout
@@ -139,6 +139,7 @@ Two-column desktop layout (form left, sticky breakdown right). Mobile: sticky bo
 - **Path alias:** `@/*` maps to `./src/*`
 - **Dev tools:** `AdminPanel` component (FAB gear icon, dev-only via `VITE_DEV_TOOLS` env var) — SQL console, table counts, seed categories, seed dummy data, clear data, factory reset
 - **Draft persistence:** sessionStorage with debounced writes (ref guard to skip initial write on load, `JSON.stringify` to save, `removeItem` on reset). Used in cashflow inline-add and zakat calculator.
+- **PWA updates:** `registerType: "prompt"` — `PwaUpdater` component (`src/components/PwaUpdater.tsx`) shows a refresh banner when a new SW is available. SW registration lives in PwaUpdater, not in `main.tsx`.
 
 ## Important Config (vite.config.ts)
 
@@ -146,6 +147,7 @@ Two-column desktop layout (form left, sticky breakdown right). Mobile: sticky bo
 - **LLM proxy plugin:** Generic middleware routes `/api/llm/{provider}/*` to upstream APIs (Anthropic, OpenAI, Gemini, custom via `X-Target-URL` header). Required because COEP blocks direct browser→API calls. Handles OPTIONS locally, strips browser headers, streams response via `Readable.fromWeb().pipe()`.
 - **Worker format:** ES modules
 - **wa-sqlite** excluded from optimizeDeps (installed from `github:rhashimoto/wa-sqlite`, not npm)
+- **PWA register type:** `prompt` (not `autoUpdate`) — update lifecycle managed by `PwaUpdater` component
 
 ## Schema (Tables)
 
