@@ -1213,8 +1213,8 @@ function ReviewView({
 
   function toggleAll() {
     const newVal = !allSelected;
-    if (fileFilter) {
-      // Only toggle rows matching the current filter
+    if (fileFilter || uncategorizedFilter) {
+      // Only toggle rows matching the current filter(s)
       const filteredSet = new Set(filteredRows);
       setRows((prev) => prev.map((r) => (filteredSet.has(r) ? { ...r, selected: newVal } : r)));
     } else {
