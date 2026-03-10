@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.2] - 2026-03-10
+
+### Fixed
+- PDF import showing "No Transactions Found" after streaming 100+ transactions — streamed transactions are now recovered when a batch fails mid-stream
+- Future dates from LLM-parsed bank statements are now discarded (cleared to empty for user correction)
+
+### Changed
+- LLM response buffer limit raised from 1MB to 4MB to accommodate verbose models like GPT-4.1 Mini
+
 ## [2.1.1] - 2026-03-10
 
 ### Added
