@@ -68,6 +68,8 @@ function llmProxyPlugin(): PluginOption {
         const ac = new AbortController();
         const proxyTimeout = setTimeout(() => ac.abort(), 120_000); // proxy-side 2min ceiling
         req.on("error", () => ac.abort());
+        // Abort upstream fetch if client disconnects before the pipe is set up (e.g. during await fetch())
+        res.on("close", () => ac.abort());
         req.on("data", (chunk: Buffer) => chunks.push(chunk));
         req.on("end", async () => {
           try {
