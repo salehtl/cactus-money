@@ -68,7 +68,6 @@ function llmProxyPlugin(): PluginOption {
         const ac = new AbortController();
         const proxyTimeout = setTimeout(() => ac.abort(), 120_000); // proxy-side 2min ceiling
         req.on("error", () => ac.abort());
-        req.on("close", () => ac.abort());
         req.on("data", (chunk: Buffer) => chunks.push(chunk));
         req.on("end", async () => {
           try {
