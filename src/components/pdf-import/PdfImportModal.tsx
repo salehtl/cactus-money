@@ -1154,6 +1154,7 @@ function ReviewView({
 }) {
   const [rows, setRows] = useState<ParsedTransaction[]>(initial);
   const [fileFilter, setFileFilter] = useState<string | null>(null);
+  const [uncategorizedFilter, setUncategorizedFilter] = useState(false);
 
   const sourceFiles = useMemo(() => {
     if (singleFile) return [];
@@ -1163,9 +1164,11 @@ function ReviewView({
   }, [rows, singleFile]);
 
   const filteredRows = useMemo(() => {
-    if (!fileFilter) return rows;
-    return rows.filter((r) => r.sourceFile === fileFilter);
-  }, [rows, fileFilter]);
+    let result = rows;
+    if (fileFilter) result = result.filter((r) => r.sourceFile === fileFilter);
+    if (uncategorizedFilter) result = result.filter((r) => r.selected && !r.category_id);
+    return result;
+  }, [rows, fileFilter, uncategorizedFilter]);
 
   const selectedCount = rows.filter((r) => r.selected).length;
   const allSelected = filteredRows.length > 0 && filteredRows.every((r) => r.selected);
@@ -1182,11 +1185,16 @@ function ReviewView({
     return { totals: { income, expense }, uncategorizedCount: uncategorized, duplicateCount: duplicates };
   }, [rows]);
 
+  // Auto-clear uncategorized filter when none remain
+  useEffect(() => {
+    if (uncategorizedFilter && uncategorizedCount === 0) setUncategorizedFilter(false);
+  }, [uncategorizedFilter, uncategorizedCount]);
+
   // Failed files warning
   const failedFiles = files.filter((f) => f.status === "error");
 
   function getRowGlobalIndex(filteredIndex: number): number {
-    if (!fileFilter) return filteredIndex;
+    if (!fileFilter && !uncategorizedFilter) return filteredIndex;
     const targetRow = filteredRows[filteredIndex];
     return rows.indexOf(targetRow);
   }
@@ -1247,9 +1255,17 @@ function ReviewView({
             </span>
           )}
           {uncategorizedCount > 0 && (
-            <span className="text-[11px] text-warning bg-warning/8 px-2 py-0.5 rounded-full font-medium">
+            <button
+              type="button"
+              onClick={() => setUncategorizedFilter((v) => !v)}
+              className={`text-[11px] px-2 py-0.5 rounded-full font-medium transition-colors cursor-pointer ${
+                uncategorizedFilter
+                  ? "bg-warning/20 text-warning ring-1 ring-warning/40"
+                  : "text-warning bg-warning/8 hover:bg-warning/14"
+              }`}
+            >
               {uncategorizedCount} uncategorized
-            </span>
+            </button>
           )}
         </div>
       </div>
@@ -1319,7 +1335,7 @@ function ReviewView({
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                       <polyline points="14 2 14 8 20 8" />
                     </svg>
-                    <p className="text-xs">{fileFilter ? "No transactions from this file" : "All transactions removed"}</p>
+                    <p className="text-xs">{uncategorizedFilter ? "All transactions are categorized" : fileFilter ? "No transactions from this file" : "All transactions removed"}</p>
                   </div>
                 </td>
               </tr>
@@ -1489,6 +1505,7 @@ function ReviewRow({
           )}
           variant="edit"
           disabled={disabled}
+          portal
         />
       </td>
       <td className="p-2">

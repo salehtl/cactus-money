@@ -1,5 +1,16 @@
-import { useState, useRef, useEffect, useCallback, useId } from "react";
+import { useState, useRef, useEffect, useCallback, useId, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import type { Category } from "../../types/database.ts";
+
+function findScrollParent(el: HTMLElement): HTMLElement | null {
+  let node = el.parentElement;
+  while (node) {
+    const { overflow, overflowY } = getComputedStyle(node);
+    if (/(auto|scroll)/.test(overflow + overflowY)) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
 
 const inputBase = "bg-transparent outline-none transition-colors";
 const inputUnderline = "border-b border-accent/30 focus:border-accent";
@@ -13,6 +24,8 @@ interface CategoryComboProps {
   disabled?: boolean;
   placeholder?: string;
   onCreateCategory?: (name: string) => Promise<string>;
+  /** Render dropdown in a portal to escape overflow:hidden containers */
+  portal?: boolean;
 }
 
 export function CategoryCombo({
@@ -23,6 +36,7 @@ export function CategoryCombo({
   disabled,
   placeholder = "Category",
   onCreateCategory,
+  portal = false,
 }: CategoryComboProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -67,7 +81,9 @@ export function CategoryCombo({
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (ref.current && !ref.current.contains(target) &&
+          (!listRef.current || !listRef.current.contains(target))) {
         closeCombo();
       }
     }
@@ -81,6 +97,31 @@ export function CategoryCombo({
     const el = listRef.current?.children[activeIndex] as HTMLElement | undefined;
     el?.scrollIntoView({ block: "nearest" });
   }, [open, activeIndex]);
+
+  // Portal positioning: track trigger rect for fixed-position dropdown
+  const [portalPos, setPortalPos] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!portal || !open || !ref.current) return;
+    let rafId = 0;
+    function update() {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (!ref.current) return;
+        const rect = ref.current.getBoundingClientRect();
+        setPortalPos({ top: rect.bottom + 4, left: rect.left + rect.width / 2 });
+      });
+    }
+    update();
+    const scrollParent = findScrollParent(ref.current);
+    scrollParent?.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update, { passive: true });
+    return () => {
+      cancelAnimationFrame(rafId);
+      scrollParent?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [portal, open]);
 
   const closeCombo = useCallback(() => {
     setOpen(false);
@@ -232,33 +273,25 @@ export function CategoryCombo({
     ? "w-full rounded-lg border border-accent bg-surface px-3 py-2 text-sm outline-none ring-1 ring-accent placeholder:text-text-light"
     : `w-full text-[11px] text-text-muted text-center py-0.5 ${inputBase} ${isEdit ? inputUnderline : inputUnderlineIdle} placeholder:text-text-light/50`;
 
-  const dropdownClass = isForm
-    ? "absolute left-0 top-full mt-1 z-[60] w-full min-w-[12rem] max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg py-1 animate-slide-up"
-    : "absolute left-1/2 -translate-x-1/2 top-full mt-1 z-[60] w-48 max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg py-1 animate-slide-up";
+  const dropdownClass = portal && portalPos
+    ? "fixed z-[9999] w-48 max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg py-1 animate-slide-up"
+    : isForm
+      ? "absolute left-0 top-full mt-1 z-[60] w-full min-w-[12rem] max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg py-1 animate-slide-up"
+      : "absolute left-1/2 -translate-x-1/2 top-full mt-1 z-[60] w-48 max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg py-1 animate-slide-up";
 
-  return (
-    <div ref={ref} className="relative">
-      <input
-        ref={inputRef}
-        type="text"
-        role="combobox"
-        aria-expanded={true}
-        aria-controls={listboxId}
-        aria-autocomplete="list"
-        aria-activedescendant={activeOptionId}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={handleInputKeyDown}
-        placeholder={selectedName || placeholder}
-        className={inputClass}
-      />
-      <ul
-        ref={listRef}
-        id={listboxId}
-        role="listbox"
-        aria-label="Categories"
-        className={dropdownClass}
-      >
+  const portalStyle = portal && portalPos
+    ? { top: portalPos.top, left: portalPos.left, transform: "translateX(-50%)" } as React.CSSProperties
+    : undefined;
+
+  const dropdownEl = (
+    <ul
+      ref={listRef}
+      id={listboxId}
+      role="listbox"
+      aria-label="Categories"
+      className={dropdownClass}
+      style={portalStyle}
+    >
         {options.map((opt, i) => {
           const isActive = i === activeIndex;
 
@@ -342,7 +375,26 @@ export function CategoryCombo({
             No matches
           </li>
         )}
-      </ul>
+    </ul>
+  );
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        ref={inputRef}
+        type="text"
+        role="combobox"
+        aria-expanded={true}
+        aria-controls={listboxId}
+        aria-autocomplete="list"
+        aria-activedescendant={activeOptionId}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleInputKeyDown}
+        placeholder={selectedName || placeholder}
+        className={inputClass}
+      />
+      {portal ? createPortal(dropdownEl, document.body) : dropdownEl}
 
       {/* Live region for screen readers */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
