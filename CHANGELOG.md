@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.1] - 2026-03-10
+
+### Fixed
+- PWA updater robustness: error handling, double-click guard, safe area spacing
+- JSON import now round-trips anchor_day and is_variable for recurring transactions
+- Snowball backup growth: pre-migration backup no longer nests previous backups
+- `normalizeImportData` wired into JSON import (was dead code)
+
+### Changed
+- Extract shared constants (BACKUP_TABLES, ANCHOR_DAY_FREQUENCIES) to reduce duplication
+- Simplify recurring engine code: remove dead refs, deduplicate field resets, inline trivial wrappers
+
 ## [2.2.0] - 2026-03-10
 
 ### Added
