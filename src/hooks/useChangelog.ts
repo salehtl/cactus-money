@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDb } from "@/context/DbContext";
-import { getAllSettings, setSetting } from "@/db/queries/settings";
-import { emitDbEvent, onDbEvent } from "@/lib/db-events";
+import { getSetting, setSetting } from "@/db/queries/settings";
 import { changelogEntries, latestVersion } from "@/lib/changelog";
 
 const SETTINGS_KEY = "last_seen_version";
@@ -14,38 +13,31 @@ export function useChangelog() {
   const [loaded, setLoaded] = useState(false);
   const runId = useRef(0);
 
-  const fetchSettings = useCallback(() => {
+  useEffect(() => {
     const id = ++runId.current;
-    getAllSettings(db).then((s) => {
+    Promise.all([
+      getSetting(db, SETTINGS_KEY),
+      getSetting(db, DISMISSED_KEY),
+    ]).then(([lastSeenVal, dismissedVal]) => {
       if (runId.current === id) {
-        setLastSeen(s[SETTINGS_KEY] ?? null);
-        setDismissed(s[DISMISSED_KEY] === "true");
+        setLastSeen(lastSeenVal ?? null);
+        setDismissed(dismissedVal === "true");
         setLoaded(true);
       }
     });
-  }, [db]);
-
-  useEffect(() => {
-    fetchSettings();
     return () => { runId.current++; };
-  }, [fetchSettings]);
-
-  useEffect(() => {
-    return onDbEvent("settings-changed", fetchSettings);
-  }, [fetchSettings]);
+  }, [db]);
 
   const hasNew = loaded && !dismissed && lastSeen !== latestVersion;
 
   const markSeen = useCallback(async () => {
     await setSetting(db, SETTINGS_KEY, latestVersion);
     setLastSeen(latestVersion);
-    emitDbEvent("settings-changed");
   }, [db]);
 
   const setDismissNotifications = useCallback(async (value: boolean) => {
     await setSetting(db, DISMISSED_KEY, value ? "true" : "false");
     setDismissed(value);
-    emitDbEvent("settings-changed");
   }, [db]);
 
   return { entries: changelogEntries, latestVersion, hasNew, dismissed, markSeen, setDismissNotifications };

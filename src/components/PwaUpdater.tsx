@@ -56,7 +56,7 @@ export function PwaUpdater() {
           cleanups.push(
             () => clearInterval(interval),
             () => document.removeEventListener("visibilitychange", onVisible),
-            () => { swRegistration = null; },
+            () => { swRegistration = null; lastUpdateCheck = 0; },
           );
         },
       });
@@ -90,7 +90,10 @@ export function PwaUpdater() {
       </button>
       <button
         type="button"
-        onClick={() => setNeedRefresh(false)}
+        onClick={() => {
+          updateFoundRef.current = false;
+          setNeedRefresh(false);
+        }}
         className="p-1 rounded-md hover:bg-white/20 transition-colors cursor-pointer"
         aria-label="Dismiss"
       >
