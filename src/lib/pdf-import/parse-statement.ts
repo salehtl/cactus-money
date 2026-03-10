@@ -129,6 +129,7 @@ export async function parseStatement(
     batches.push(images.slice(i, i + PAGES_PER_BATCH));
   }
 
+  const totalBatches = batches.length;
   let batchesDone = 0;
 
   onProgress?.({
@@ -137,10 +138,11 @@ export async function parseStatement(
     pageCount: images.length,
     fileName: file.name,
     batch: 0,
-    totalBatches: batches.length,
+    totalBatches,
   });
 
-  // Process batches with controlled concurrency
+  // Process a single batch. Returns transactions but does NOT call onTransaction —
+  // callers emit only after confirming the batch succeeded (avoids duplicates on retry).
   async function processBatch(batch: PageImage[]) {
     const batchTxns: ParsedTransaction[] = [];
     let parseOffset = 0;
@@ -158,7 +160,6 @@ export async function parseStatement(
             ? (categoryMap.get(txn.category.toLowerCase()) ?? null)
             : null;
           batchTxns.push(txn);
-          onTransaction?.(txn);
         });
       },
     );
@@ -172,24 +173,28 @@ export async function parseStatement(
       );
     }
 
+    return batchTxns;
+  }
+
+  function emitBatch(txns: ParsedTransaction[]) {
+    allTransactions.push(...txns);
+    for (const txn of txns) onTransaction?.(txn);
     batchesDone++;
     onProgress?.({
-      message: batchesDone < batches.length
-        ? `Analyzed ${batchesDone} of ${batches.length} batches...`
+      message: batchesDone < totalBatches
+        ? `Analyzed ${batchesDone} of ${totalBatches} batches...`
         : "Finishing up...",
       phase: "analyzing",
       pageCount: images.length,
       fileName: file.name,
       batch: batchesDone,
-      totalBatches: batches.length,
+      totalBatches,
     });
-
-    return batchTxns;
   }
 
   // Run batches with controlled concurrency, re-queuing rate-limited failures.
   // On rate-limit, failed batches are spliced back into the queue and
-  // concurrency drops to 1 for the remainder of the import.
+  // processing drops to sequential for the remainder of the import.
   let rateLimited = false;
   let i = 0;
 
@@ -202,7 +207,7 @@ export async function parseStatement(
       for (let j = 0; j < settled.length; j++) {
         const r = settled[j];
         if (r.status === "fulfilled") {
-          allTransactions.push(...r.value);
+          emitBatch(r.value);
         } else if (
           r.reason instanceof ImportError &&
           (r.reason.code === "rate_limited" || r.reason.code === "api_error")
@@ -217,31 +222,30 @@ export async function parseStatement(
 
       if (failedIndices) {
         rateLimited = true;
-        // Re-insert failed batches at current position so the sequential
-        // path picks them up after a backoff delay
         const failed = failedIndices.map((j) => chunk[j]);
         batches.splice(i, 0, ...failed);
         await new Promise((r) => setTimeout(r, RATE_LIMIT_BACKOFF_MS));
       }
     } else {
-      // Sequential path with backoff between retries
+      // Sequential path with backoff between all batches
       try {
-        const result = await processBatch(batches[i]);
-        allTransactions.push(...result);
+        emitBatch(await processBatch(batches[i]));
       } catch (e) {
         if (
           e instanceof ImportError &&
           (e.code === "rate_limited" || e.code === "api_error")
         ) {
           await new Promise((r) => setTimeout(r, RATE_LIMIT_BACKOFF_MS));
-          // Retry once more; if it fails again, let it propagate
-          const result = await processBatch(batches[i]);
-          allTransactions.push(...result);
+          // Retry once; if it fails again, let it propagate
+          emitBatch(await processBatch(batches[i]));
         } else {
           throw e;
         }
       }
       i++;
+      if (i < batches.length) {
+        await new Promise((r) => setTimeout(r, RATE_LIMIT_BACKOFF_MS));
+      }
     }
   }
 
