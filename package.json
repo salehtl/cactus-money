@@ -7,19 +7,29 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "bun run build && wrangler pages deploy dist",
-    "preview:prod": "bun run build && wrangler pages dev dist"
+    "preview:prod": "bun run build && wrangler pages dev dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/router-plugin": "^1.166.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "latest",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vite-pwa/assets-generator": "^1.0.2",
     "@vitejs/plugin-react": "^5.1.4",
+    "better-sqlite3": "^12.6.2",
+    "happy-dom": "^20.8.3",
     "tailwindcss": "^4.2.1",
     "vite": "^7.3.1",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "typescript": "^5"
