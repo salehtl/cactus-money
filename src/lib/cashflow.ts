@@ -6,7 +6,7 @@ export interface CashflowRow {
   id: string;
   label: string;
   type: "income" | "expense";
-  status: "planned" | "confirmed";
+  status: "planned" | "confirmed" | "review";
   isRecurring: boolean;
   recurringId: string | null;
   frequency: string | null;

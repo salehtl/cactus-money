@@ -19,7 +19,7 @@ export async function createTransaction(
     payee?: string;
     notes?: string;
     recurring_id?: string | null;
-    status?: "planned" | "confirmed";
+    status?: "planned" | "confirmed" | "review";
     group_name?: string;
   }
 ): Promise<void> {
@@ -51,7 +51,7 @@ export async function updateTransaction(
     date?: string;
     payee?: string;
     notes?: string;
-    status?: "planned" | "confirmed";
+    status?: "planned" | "confirmed" | "review";
     group_name?: string;
   }
 ): Promise<void> {

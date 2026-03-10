@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import type { CashflowGroup, CashflowRow, CashflowSummary } from "../../lib/cashflow.ts";
 import type { Category, RecurringTransaction } from "../../types/database.ts";
 import { formatCurrency, formatDateShort, getToday } from "../../lib/format.ts";
@@ -24,10 +24,10 @@ interface SingleMonthViewProps {
   summary: CashflowSummary;
   month: string;
   categories?: Category[];
-  onToggleStatus: (id: string, newStatus: "planned" | "confirmed") => void;
+  onToggleStatus: (id: string, newStatus: "planned" | "confirmed" | "review") => void;
   onDeleteRow: (id: string) => void;
   onStopRecurrence?: (recurringId: string) => void;
-  onEditRow: (id: string, updates: { payee?: string; amount?: number; type?: "income" | "expense"; category_id?: string | null; date?: string; group_name?: string; status?: "planned" | "confirmed" }) => void;
+  onEditRow: (id: string, updates: { payee?: string; amount?: number; type?: "income" | "expense"; category_id?: string | null; date?: string; group_name?: string; status?: "planned" | "confirmed" | "review" }) => void;
   onAddRow: (data: {
     payee: string;
     type: "income" | "expense";
@@ -60,6 +60,16 @@ export function SingleMonthView({
   onDuplicateRow,
   onCreateCategory,
 }: SingleMonthViewProps) {
+  const reviewCount = useMemo(
+    () =>
+      [...incomeGroups, ...expenseGroups]
+        .flatMap((g) => g.rows)
+        .filter((r) => r.status === "review").length,
+    [incomeGroups, expenseGroups]
+  );
+
+  const firstReviewRef = useRef<HTMLDivElement>(null);
+
   return (
     <div className="space-y-5">
       {/* Summary strip */}
@@ -84,6 +94,12 @@ export function SingleMonthView({
           variant={summary.net >= 0 ? "income" : "expense"}
         />
       </div>
+
+      {/* Review banner */}
+      <ReviewBanner
+        count={reviewCount}
+        onReview={() => firstReviewRef.current?.scrollIntoView({ behavior: "smooth" })}
+      />
 
       {/* Income section */}
       <TableSection
@@ -118,6 +134,29 @@ export function SingleMonthView({
         onDuplicateRow={onDuplicateRow}
         onCreateCategory={onCreateCategory}
       />
+    </div>
+  );
+}
+
+// --- Review banner ---
+
+function ReviewBanner({ count, onReview }: { count: number; onReview: () => void }) {
+  if (count === 0) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-warning/10 border border-warning/20 rounded-xl text-sm">
+      <div className="flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-warning animate-pulse shrink-0" />
+        <span className="text-text">
+          <strong>{count}</strong> recurring {count === 1 ? "item needs" : "items need"} updated amounts
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onReview}
+        className="text-warning font-semibold hover:underline cursor-pointer shrink-0"
+      >
+        Review
+      </button>
     </div>
   );
 }
@@ -517,7 +556,8 @@ function ItemRow({
   }
 
   // --- Display mode ---
-  const isPlanned = row.status === "planned";
+  const isPlanned = row.status === "planned" || row.status === "review";
+  const nextStatus = row.status === "confirmed" ? "planned" : "confirmed";
   const secondaryInfo = [
     formatDateShort(row.date),
     row.categoryName,
@@ -577,7 +617,7 @@ function ItemRow({
         <div className="flex justify-center">
           <StatusPill
             status={row.status}
-            onClick={() => onToggleStatus(row.id, isPlanned ? "confirmed" : "planned")}
+            onClick={() => onToggleStatus(row.id, nextStatus)}
           />
         </div>
 

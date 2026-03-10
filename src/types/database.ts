@@ -20,7 +20,7 @@ export interface Transaction {
   payee: string;
   notes: string;
   recurring_id: string | null;
-  status: "planned" | "confirmed";
+  status: "planned" | "confirmed" | "review";
   group_name: string;
   created_at: string;
   updated_at: string;

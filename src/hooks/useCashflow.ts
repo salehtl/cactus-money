@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useDb } from "../context/DbContext.tsx";
 import { getTransactionsForMonth } from "../db/queries/cashflow.ts";
 import { createTransaction, updateTransaction, deleteTransaction } from "../db/queries/transactions.ts";
-import { populateFutureMonth, createRecurring } from "../db/queries/recurring.ts";
+import { populateFutureMonth, createRecurring, updateRecurring } from "../db/queries/recurring.ts";
 import { buildCashflowRows, type CashflowGroup, type CashflowSummary, type GroupBy } from "../lib/cashflow.ts";
 import { emitDbEvent, onDbEvent } from "../lib/db-events.ts";
 import type { TransactionWithCategory } from "../db/queries/transactions.ts";
@@ -103,9 +103,23 @@ export function useCashflow(month: string, groupBy: GroupBy = "none") {
   const editTransaction = useCallback(
     async (id: string, updates: Parameters<typeof updateTransaction>[2]) => {
       await updateTransaction(db, id, updates);
+
+      // Auto-confirm review transactions when edited
+      if (!updates.status) {
+        const txn = transactions.find((t) => t.id === id);
+        if (txn?.status === "review") {
+          await updateTransaction(db, id, { status: "confirmed" });
+          // Update the recurring rule's default amount
+          if (txn.recurring_id && updates.amount !== undefined) {
+            await updateRecurring(db, txn.recurring_id, { amount: updates.amount });
+            emitDbEvent("recurring-changed");
+          }
+        }
+      }
+
       emitDbEvent("transactions-changed");
     },
-    [db]
+    [db, transactions]
   );
 
   const removeTransaction = useCallback(
