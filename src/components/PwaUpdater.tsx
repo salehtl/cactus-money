@@ -13,36 +13,44 @@ export function checkForUpdates(): Promise<void> | null {
 
 export function PwaUpdater() {
   const [needRefresh, setNeedRefresh] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const updateSW = useRef<((reload?: boolean) => Promise<void>) | null>(null);
   const runRef = useRef(0);
+  const updateFoundRef = useRef(false);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     const run = ++runRef.current;
     const cleanups: (() => void)[] = [];
+
     import("virtual:pwa-register").then(({ registerSW }) => {
       if (run !== runRef.current) return;
       updateSW.current = registerSW({
         immediate: true,
         onNeedRefresh() {
           if (run !== runRef.current) return;
+          updateFoundRef.current = true;
           setNeedRefresh(true);
         },
         onRegistered(registration) {
           if (!registration || run !== runRef.current) return;
           swRegistration = registration;
-          // Check for updates every 15 minutes
-          const interval = setInterval(() => {
+
+          const safeUpdate = () => {
+            if (updateFoundRef.current) return;
             lastUpdateCheck = Date.now();
-            registration.update();
-          }, 15 * 60 * 1000);
+            registration.update().catch(() => {});
+          };
+
+          // Check for updates every 15 minutes
+          const interval = setInterval(safeUpdate, 15 * 60 * 1000);
           // Also check when app returns from background (with cooldown)
           const onVisible = () => {
             if (document.visibilityState !== "visible") return;
+            if (updateFoundRef.current) return;
             const now = Date.now();
             if (now - lastUpdateCheck < UPDATE_COOLDOWN_MS) return;
-            lastUpdateCheck = now;
-            registration.update();
+            safeUpdate();
           };
           document.addEventListener("visibilitychange", onVisible);
           cleanups.push(
@@ -53,20 +61,32 @@ export function PwaUpdater() {
         },
       });
     });
-    return () => cleanups.forEach((fn) => fn());
+    return () => {
+      updateFoundRef.current = false;
+      cleanups.forEach((fn) => fn());
+    };
   }, []);
+
+  function handleRefresh() {
+    if (refreshing || !updateSW.current) return;
+    setRefreshing(true);
+    updateSW.current(true).catch(() => {
+      setRefreshing(false);
+    });
+  }
 
   if (!needRefresh) return null;
 
   return (
-    <div className="fixed bottom-18 left-1/2 -translate-x-1/2 md:bottom-4 md:left-auto md:translate-x-0 md:right-4 z-50 flex items-center gap-3 bg-primary text-white pl-4 pr-2 py-2 rounded-lg shadow-lg text-sm font-medium animate-slide-up">
+    <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 md:bottom-4 md:left-auto md:translate-x-0 md:right-4 z-50 flex items-center gap-3 bg-primary text-white pl-4 pr-2 py-2 rounded-lg shadow-lg text-sm font-medium animate-slide-up">
       <span>A new version is available</span>
       <button
         type="button"
-        onClick={() => updateSW.current?.(true).catch(() => {})}
-        className="px-3 py-1 rounded-md bg-white/20 hover:bg-white/30 transition-colors cursor-pointer text-xs font-semibold"
+        onClick={handleRefresh}
+        disabled={refreshing}
+        className="px-3 py-1 rounded-md bg-white/20 hover:bg-white/30 disabled:opacity-50 disabled:cursor-default transition-colors cursor-pointer text-xs font-semibold"
       >
-        Refresh
+        {refreshing ? "Reloading…" : "Refresh"}
       </button>
       <button
         type="button"

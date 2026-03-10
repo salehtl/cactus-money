@@ -265,6 +265,7 @@ function SettingsPage() {
             onClick={() => {
               const result = checkForUpdates();
               if (!result) { toast("Not ready yet — try again in a moment", "info"); return; }
+              result.catch(() => toast("Update check failed — check your connection", "error"));
               toast("Checking for updates...", "info");
             }}
             className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:bg-surface-alt transition-colors cursor-pointer text-left"
