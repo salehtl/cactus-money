@@ -1,7 +1,6 @@
-import { ImportError } from "../errors.ts";
 import type { LLMProvider, ModelOption } from "../llm-provider.ts";
 import { readSSEStream } from "./sse.ts";
-import { classifyHttpError, openaiExtractText, EXTRACT_PROMPT } from "./shared.ts";
+import { classifyHttpError, openaiExtractText, throwNetworkError, FETCH_TIMEOUT_MS, EXTRACT_PROMPT } from "./shared.ts";
 
 export const OPENAI_MODELS: ModelOption[] = [
   { id: "gpt-4.1-mini", label: "GPT-4.1 Mini", description: "Fast and affordable" },
@@ -51,17 +50,10 @@ export const openaiProvider: LLMProvider = {
           "Authorization": `Bearer ${config.apiKey}`,
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
     } catch (e) {
-      throw new ImportError(
-        "network_error",
-        (e as Error).name === "TimeoutError" ? "Request Timed Out" : "Connection Failed",
-        (e as Error).name === "TimeoutError"
-          ? "The API did not respond within 60 seconds."
-          : "Could not reach the OpenAI API.",
-        "Check your internet connection or proxy URL in Settings.",
-      );
+      throwNetworkError(e, "Could not reach the OpenAI API.");
     }
 
     if (!response.ok) {

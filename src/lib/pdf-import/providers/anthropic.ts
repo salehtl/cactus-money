@@ -1,7 +1,6 @@
-import { ImportError } from "../errors.ts";
 import type { LLMProvider, ModelOption } from "../llm-provider.ts";
 import { readSSEStream } from "./sse.ts";
-import { classifyHttpError, EXTRACT_PROMPT } from "./shared.ts";
+import { classifyHttpError, throwNetworkError, FETCH_TIMEOUT_MS, EXTRACT_PROMPT } from "./shared.ts";
 
 export const ANTHROPIC_MODELS: ModelOption[] = [
   { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", description: "Fastest, cheapest" },
@@ -13,7 +12,7 @@ export const ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-4-6";
 
 const ERROR_MAPPINGS = [
   { status: 401, code: "invalid_api_key" as const, title: "Invalid API Key", message: "The API key was rejected by Anthropic.", suggestion: "Check that your key is correct in Settings. Keys start with sk-ant-." },
-  { status: 403, code: "credits_exhausted" as const, title: "No API Credits", message: "Your Anthropic account has insufficient credits or permissions.", suggestion: "Add credits at console.anthropic.com, then try again." },
+  { status: 403, code: "api_error" as const, title: "Access Denied", message: "The Anthropic API rejected this request. This can happen if you've hit a usage limit, your account lacks credits, or repeated requests triggered rate protection.", suggestion: "Wait a minute and retry. If it persists, check your credit balance and usage limits at console.anthropic.com." },
   { status: 429, code: "rate_limited" as const, title: "Rate Limited", message: "Too many requests to the Anthropic API.", suggestion: "Wait a minute, then try again." },
   { status: 529, code: "api_error" as const, title: "API Overloaded", message: "Anthropic's API is temporarily overloaded.", suggestion: "Wait a moment and retry." },
 ];
@@ -53,17 +52,10 @@ export const anthropicProvider: LLMProvider = {
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
     } catch (e) {
-      throw new ImportError(
-        "network_error",
-        (e as Error).name === "TimeoutError" ? "Request Timed Out" : "Connection Failed",
-        (e as Error).name === "TimeoutError"
-          ? "The API did not respond within 60 seconds."
-          : "Could not reach the API.",
-        "Check your internet connection or proxy URL in Settings.",
-      );
+      throwNetworkError(e, "Could not reach the API.");
     }
 
     if (!response.ok) {

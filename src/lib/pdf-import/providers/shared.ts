@@ -39,5 +39,19 @@ export function openaiExtractText(data: string): string | null {
   }
 }
 
+/** Timeout applied to all provider fetch calls. */
+export const FETCH_TIMEOUT_MS = 60_000;
+
+/** Throw an ImportError for network/timeout failures. */
+export function throwNetworkError(e: unknown, unreachableMsg: string, suggestion?: string): never {
+  const isTimeout = (e as Error).name === "TimeoutError";
+  throw new ImportError(
+    "network_error",
+    isTimeout ? "Request Timed Out" : "Connection Failed",
+    isTimeout ? "The API did not respond within 60 seconds." : unreachableMsg,
+    suggestion ?? "Check your internet connection or proxy URL in Settings.",
+  );
+}
+
 /** Shared user prompt appended to images in all providers. */
 export const EXTRACT_PROMPT = "Extract all transactions from these bank statement pages. Output JSON only.";

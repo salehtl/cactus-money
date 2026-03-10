@@ -1,7 +1,6 @@
-import { ImportError } from "../errors.ts";
 import type { LLMProvider, ModelOption } from "../llm-provider.ts";
 import { readSSEStream } from "./sse.ts";
-import { classifyHttpError, EXTRACT_PROMPT } from "./shared.ts";
+import { classifyHttpError, throwNetworkError, FETCH_TIMEOUT_MS, EXTRACT_PROMPT } from "./shared.ts";
 
 export const GEMINI_MODELS: ModelOption[] = [
   { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Fast and affordable" },
@@ -50,17 +49,10 @@ export const geminiProvider: LLMProvider = {
           "x-goog-api-key": config.apiKey,
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
     } catch (e) {
-      throw new ImportError(
-        "network_error",
-        (e as Error).name === "TimeoutError" ? "Request Timed Out" : "Connection Failed",
-        (e as Error).name === "TimeoutError"
-          ? "The API did not respond within 60 seconds."
-          : "Could not reach the Gemini API.",
-        "Check your internet connection or proxy URL in Settings.",
-      );
+      throwNetworkError(e, "Could not reach the Gemini API.");
     }
 
     if (!response.ok) {

@@ -132,6 +132,7 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
       const updatedFiles = importFiles.map((f) => ({ ...f }));
       filesRef.current = updatedFiles;
       const allTransactions: ParsedTransaction[] = [];
+      let txnCapReached = false;
 
       function syncFiles() {
         setState((prev) => {
@@ -175,7 +176,12 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
             },
             (txn) => {
               if (!isCurrent()) return;
-              if (allTransactions.length + txnQueueRef.current.length >= MAX_TRANSACTIONS) return;
+              if (txnCapReached) return;
+              if (allTransactions.length + txnQueueRef.current.length >= MAX_TRANSACTIONS) {
+                txnCapReached = true;
+                toast(`Only the first ${MAX_TRANSACTIONS} transactions are shown. The rest were trimmed for safety.`, "warning");
+                return;
+              }
               txn.sourceFile = importFile.file.name;
               txnQueueRef.current.push(txn);
               startDraining();
@@ -219,21 +225,10 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
         const maxDate = dates.reduce((a, b) => (a > b ? a : b));
         const existing = await getExistingFingerprints(db, minDate, maxDate);
 
-        let truncated = false;
-        let txns = allTransactions;
-        if (txns.length > MAX_TRANSACTIONS) {
-          txns = txns.slice(0, MAX_TRANSACTIONS);
-          truncated = true;
-        }
-
-        const marked = txns.map((t) => {
+        const marked = allTransactions.map((t) => {
           const isDup = existing.has(txnFingerprint(t.date, t.amount, t.payee));
           return isDup ? { ...t, duplicate: true, selected: false } : t;
         });
-
-        if (truncated) {
-          toast(`Only the first ${MAX_TRANSACTIONS} transactions are shown. The rest were trimmed for safety.`, "warning");
-        }
 
         setState({ step: "reviewing", transactions: marked, files: updatedFiles });
       } else {
