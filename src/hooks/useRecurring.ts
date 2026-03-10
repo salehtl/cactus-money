@@ -39,12 +39,18 @@ export function useRecurring() {
       start_date: string;
       end_date?: string | null;
       mode?: "reminder" | "auto";
+      is_variable?: boolean;
     }) => {
       const id = crypto.randomUUID();
+      const anchorDay = ["monthly", "quarterly", "yearly"].includes(rec.frequency)
+        ? parseInt(rec.start_date.slice(8, 10), 10)
+        : null;
       await createRecurring(db, {
         id,
         ...rec,
         next_occurrence: rec.start_date,
+        anchor_day: anchorDay,
+        is_variable: rec.is_variable ? 1 : 0,
       });
       emitDbEvent("recurring-changed");
 

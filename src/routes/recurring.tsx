@@ -41,16 +41,18 @@ function RecurringPage() {
   const { items, loading, add, update, remove, stopRecurrence } = useRecurring();
   const { categories, add: addCategory } = useCategories();
   const { toast } = useToast();
-  const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false);
 
-  const active = items.filter((r) => r.is_active);
+  const activeIncome = items.filter((r) => r.is_active && r.type === "income");
+  const activeExpense = items.filter((r) => r.is_active && r.type === "expense");
   const inactive = items.filter((r) => !r.is_active);
+  const incomeTotal = activeIncome.reduce((s, r) => s + r.amount, 0);
+  const expenseTotal = activeExpense.reduce((s, r) => s + r.amount, 0);
 
-  async function handleCreateCategory(name: string): Promise<string> {
-    const id = await addCategory({ name, color: "#64748b", is_income: false });
+  async function handleCreateCategory(name: string, isIncome: boolean): Promise<string> {
+    const id = await addCategory({ name, color: "#64748b", is_income: isIncome });
     return id;
   }
 
@@ -76,84 +78,53 @@ function RecurringPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Recurring"
-        action={
-          !showForm && (
-            <Button size="sm" onClick={() => setShowForm(true)}>
-              <PlusIcon className="w-4 h-4 mr-1.5" />
-              New rule
-            </Button>
-          )
-        }
+      <PageHeader title="Recurring" />
+
+      <RecurringSummary income={incomeTotal} expenses={expenseTotal} />
+
+      <RecurringGroup
+        type="income"
+        items={activeIncome}
+        total={incomeTotal}
+        categories={categories}
+        editingId={editingId}
+        setEditingId={setEditingId}
+        onToggleActive={handleToggleActive}
+        onDelete={(id) => setDeleteId(id)}
+        onCreateCategory={handleCreateCategory}
+        onAdd={async (data) => {
+          await add(data);
+          emitDbEvent("transactions-changed");
+          toast("Recurring rule created");
+        }}
+        onUpdate={async (id, data) => {
+          await update(id, data);
+          emitDbEvent("transactions-changed");
+          toast("Rule updated");
+        }}
       />
 
-      {showForm && (
-        <RecurringForm
-          categories={categories}
-          onCreateCategory={handleCreateCategory}
-          onSubmit={async (data) => {
-            await add(data);
-            emitDbEvent("transactions-changed");
-            setShowForm(false);
-            toast("Recurring rule created");
-          }}
-          onCancel={() => setShowForm(false)}
-        />
-      )}
-
-      {/* Active rules */}
-      {active.length === 0 && !showForm && (
-        <div className="bg-surface rounded-xl border border-border p-8 text-center">
-          <p className="text-text-muted text-sm mb-3">No recurring rules yet</p>
-          <Button size="sm" onClick={() => setShowForm(true)}>
-            Create your first rule
-          </Button>
-        </div>
-      )}
-
-      {active.length > 0 && (
-        <div className="bg-surface rounded-xl border border-border">
-          {/* Header */}
-          <div className="grid grid-cols-[1fr_100px_88px_96px_96px_100px_72px] gap-2 px-4 py-2.5 border-b border-border bg-surface-alt rounded-t-xl text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-            <div>Payee</div>
-            <div>Amount</div>
-            <div>Frequency</div>
-            <div>Category</div>
-            <div>Start</div>
-            <div>End</div>
-            <div className="text-right">Actions</div>
-          </div>
-
-          {active.map((item) =>
-            editingId === item.id ? (
-              <RecurringForm
-                key={item.id}
-                categories={categories}
-                onCreateCategory={handleCreateCategory}
-                initial={item}
-                inline
-                onSubmit={async (data) => {
-                  await update(item.id, data);
-                  emitDbEvent("transactions-changed");
-                  setEditingId(null);
-                  toast("Rule updated");
-                }}
-                onCancel={() => setEditingId(null)}
-              />
-            ) : (
-              <RecurringRow
-                key={item.id}
-                item={item}
-                categories={categories}
-                onEdit={() => setEditingId(item.id)}
-                onToggleActive={() => handleToggleActive(item)}
-                onDelete={() => setDeleteId(item.id)}
-              />
-            )
-          )}
-        </div>
-      )}
+      <RecurringGroup
+        type="expense"
+        items={activeExpense}
+        total={expenseTotal}
+        categories={categories}
+        editingId={editingId}
+        setEditingId={setEditingId}
+        onToggleActive={handleToggleActive}
+        onDelete={(id) => setDeleteId(id)}
+        onCreateCategory={handleCreateCategory}
+        onAdd={async (data) => {
+          await add(data);
+          emitDbEvent("transactions-changed");
+          toast("Recurring rule created");
+        }}
+        onUpdate={async (id, data) => {
+          await update(id, data);
+          emitDbEvent("transactions-changed");
+          toast("Rule updated");
+        }}
+      />
 
       {/* Inactive rules */}
       {inactive.length > 0 && (
@@ -212,6 +183,143 @@ function RecurringPage() {
   );
 }
 
+// --- Summary ---
+
+function RecurringSummary({ income, expenses }: { income: number; expenses: number }) {
+  const net = income - expenses;
+  return (
+    <div className="flex items-stretch gap-3 overflow-x-auto mb-5">
+      <div className="flex-1 min-w-[140px] bg-surface rounded-xl border border-border p-3">
+        <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Recurring Income</div>
+        <div className="text-lg font-bold tabular-nums text-success">{formatCurrency(income)}</div>
+      </div>
+      <div className="flex-1 min-w-[140px] bg-surface rounded-xl border border-border p-3">
+        <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Recurring Expenses</div>
+        <div className="text-lg font-bold tabular-nums">{formatCurrency(expenses)}</div>
+      </div>
+      <div className="flex-1 min-w-[140px] bg-surface rounded-xl border border-border p-3">
+        <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Net</div>
+        <div className={`text-lg font-bold tabular-nums ${net >= 0 ? "text-success" : "text-danger"}`}>
+          {net >= 0 ? "+" : ""}{formatCurrency(Math.abs(net))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Group ---
+
+function RecurringGroup({
+  type,
+  items,
+  total,
+  categories,
+  editingId,
+  setEditingId,
+  onToggleActive,
+  onDelete,
+  onCreateCategory,
+  onAdd,
+  onUpdate,
+}: {
+  type: "income" | "expense";
+  items: RecurringTransaction[];
+  total: number;
+  categories: Category[];
+  editingId: string | null;
+  setEditingId: (id: string | null) => void;
+  onToggleActive: (item: RecurringTransaction) => void;
+  onDelete: (id: string) => void;
+  onCreateCategory: (name: string, isIncome: boolean) => Promise<string>;
+  onAdd: (data: FormData) => Promise<void>;
+  onUpdate: (id: string, data: FormData) => Promise<void>;
+}) {
+  const [showAdd, setShowAdd] = useState(false);
+  const isIncome = type === "income";
+
+  return (
+    <div className="mb-5">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className={`text-sm font-bold uppercase tracking-wider ${isIncome ? "text-success" : "text-text-muted"}`}>
+          {isIncome ? "Income" : "Expenses"}
+        </h2>
+        <span className="text-sm font-semibold tabular-nums text-text-muted">
+          {isIncome ? "+" : ""}{formatCurrency(total)}
+        </span>
+      </div>
+
+      <div className="bg-surface rounded-xl border border-border">
+        {/* Header row */}
+        <div className="grid grid-cols-[1fr_100px_88px_96px_96px_100px_72px] gap-2 px-4 py-2.5 border-b border-border bg-surface-alt rounded-t-xl text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+          <div>Payee</div>
+          <div>Amount</div>
+          <div>Frequency</div>
+          <div>Category</div>
+          <div>Start</div>
+          <div>End</div>
+          <div className="text-right">Actions</div>
+        </div>
+
+        {/* Item rows */}
+        {items.map((item) =>
+          editingId === item.id ? (
+            <RecurringForm
+              key={item.id}
+              type={type}
+              categories={categories}
+              onCreateCategory={onCreateCategory}
+              initial={item}
+              inline
+              onSubmit={async (data) => {
+                await onUpdate(item.id, data);
+                setEditingId(null);
+              }}
+              onCancel={() => setEditingId(null)}
+            />
+          ) : (
+            <RecurringRow
+              key={item.id}
+              item={item}
+              categories={categories}
+              onEdit={() => setEditingId(item.id)}
+              onToggleActive={() => onToggleActive(item)}
+              onDelete={() => onDelete(item.id)}
+            />
+          )
+        )}
+
+        {/* Empty state */}
+        {items.length === 0 && !showAdd && (
+          <div className="px-4 py-6 text-center text-text-muted text-sm">No recurring {type} rules</div>
+        )}
+
+        {/* Inline add */}
+        {showAdd ? (
+          <RecurringForm
+            type={type}
+            categories={categories}
+            onCreateCategory={onCreateCategory}
+            inline
+            onSubmit={async (data) => {
+              await onAdd(data);
+              setShowAdd(false);
+            }}
+            onCancel={() => setShowAdd(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            className="w-full text-left px-4 py-2.5 text-sm text-text-light hover:text-accent hover:bg-surface-alt/50 transition-colors cursor-pointer border-t border-border"
+          >
+            + Add {type} rule
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // --- Row ---
 
 function RecurringRow({
@@ -251,13 +359,8 @@ function RecurringRow({
       className="grid grid-cols-[1fr_100px_88px_96px_96px_100px_72px] gap-2 px-4 py-2.5 border-b border-border last:border-b-0 hover:bg-surface-alt/50 transition-colors group items-center"
       onDoubleClick={onEdit}
     >
-      {/* Payee + type badge */}
+      {/* Payee */}
       <div className="flex items-center gap-2 min-w-0">
-        <span className={`shrink-0 text-[9px] font-bold uppercase px-1 py-0.5 rounded ${
-          isIncome ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
-        }`}>
-          {isIncome ? "IN" : "EX"}
-        </span>
         <span className="truncate text-sm font-medium">{item.payee || "Untitled"}</span>
         {isDue && (
           <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-warning animate-pulse" title="Due" />
@@ -266,7 +369,8 @@ function RecurringRow({
 
       {/* Amount */}
       <div className={`text-sm tabular-nums ${isIncome ? "text-success" : ""}`}>
-        {isIncome ? "+" : ""}{formatCurrency(item.amount)}
+        {item.is_variable ? "~" : ""}{isIncome ? "+" : ""}{formatCurrency(item.amount)}
+        {!!item.is_variable && <span className="ml-1 text-warning text-xs" title="Variable amount">&#x26A1;</span>}
       </div>
 
       {/* Frequency */}
@@ -350,9 +454,11 @@ interface FormData {
   start_date: string;
   end_date: string | null;
   mode: "reminder" | "auto";
+  is_variable?: boolean;
 }
 
 function RecurringForm({
+  type,
   categories,
   onCreateCategory,
   initial,
@@ -360,14 +466,14 @@ function RecurringForm({
   onSubmit,
   onCancel,
 }: {
+  type: "income" | "expense";
   categories: Category[];
-  onCreateCategory: (name: string) => Promise<string>;
+  onCreateCategory: (name: string, isIncome: boolean) => Promise<string>;
   initial?: RecurringTransaction;
   inline?: boolean;
   onSubmit: (data: FormData) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [type, setType] = useState<"income" | "expense">(initial?.type ?? "expense");
   const [payee, setPayee] = useState(initial?.payee ?? "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
   const [frequency, setFrequency] = useState<string>(initial?.frequency ?? "monthly");
@@ -376,12 +482,18 @@ function RecurringForm({
   const [endDate, setEndDate] = useState(initial?.end_date ?? "");
   const [hasEndDate, setHasEndDate] = useState(!!initial?.end_date);
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [isVariable, setIsVariable] = useState(initial?.is_variable === 1);
   const [saving, setSaving] = useState(false);
   const payeeRef = useRef<HTMLInputElement>(null);
 
+  const isIncome = type === "income";
   const filteredCategories = categories.filter((c) =>
-    type === "income" ? c.is_income : !c.is_income
+    isIncome ? c.is_income : !c.is_income
   );
+
+  async function handleCreateCategoryInForm(name: string): Promise<string> {
+    return onCreateCategory(name, isIncome);
+  }
 
   useEffect(() => {
     requestAnimationFrame(() => payeeRef.current?.focus());
@@ -402,6 +514,7 @@ function RecurringForm({
         start_date: startDate,
         end_date: hasEndDate && endDate ? endDate : null,
         mode: "auto",
+        is_variable: isVariable,
       });
     } finally {
       setSaving(false);
@@ -424,41 +537,37 @@ function RecurringForm({
       <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-x-6 gap-y-3">
         {/* Left column */}
         <div className="space-y-3">
-          {/* Type toggle + Payee */}
-          <div className="flex items-end gap-2">
-            <button
-              type="button"
-              onClick={() => setType(type === "income" ? "expense" : "income")}
-              className={`shrink-0 text-[10px] font-bold uppercase px-1.5 py-2 rounded cursor-pointer border transition-colors ${
-                type === "income"
-                  ? "border-success/30 bg-success/10 text-success hover:bg-success/20"
-                  : "border-danger/30 bg-danger/10 text-danger hover:bg-danger/20"
-              }`}
-            >
-              {type === "income" ? "IN" : "EX"}
-            </button>
-            <div className="flex-1">
-              <Input
-                ref={payeeRef}
-                label="Payee"
-                value={payee}
-                onChange={(e) => setPayee(e.target.value)}
-                placeholder="e.g. Rent, Salary, Netflix"
-              />
-            </div>
-          </div>
+          {/* Payee */}
+          <Input
+            ref={payeeRef}
+            label="Payee"
+            value={payee}
+            onChange={(e) => setPayee(e.target.value)}
+            placeholder="e.g. Rent, Salary, Netflix"
+          />
 
           {/* Amount + Frequency */}
           <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Amount"
-              type="number"
-              step="0.01"
-              min="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-            />
+            <div className="space-y-1">
+              <Input
+                label="Amount"
+                type="number"
+                step="0.01"
+                min="0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+              />
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isVariable}
+                  onChange={(e) => setIsVariable(e.target.checked)}
+                  className="accent-accent"
+                />
+                <span className="text-xs text-text-muted">Variable amount</span>
+              </label>
+            </div>
             <Select
               label="Frequency"
               value={frequency}
@@ -475,7 +584,7 @@ function RecurringForm({
               onChange={setCategoryId}
               categories={filteredCategories}
               variant="form"
-              onCreateCategory={onCreateCategory}
+              onCreateCategory={handleCreateCategoryInForm}
             />
           </div>
         </div>

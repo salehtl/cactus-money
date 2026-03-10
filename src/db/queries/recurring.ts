@@ -26,12 +26,14 @@ export async function createRecurring(
     end_date?: string | null;
     next_occurrence: string;
     mode?: "reminder" | "auto";
+    anchor_day?: number | null;
+    is_variable?: number;
   }
 ): Promise<void> {
   await db.exec(
     `INSERT INTO recurring_transactions
-     (id, amount, type, category_id, payee, notes, frequency, custom_interval_days, start_date, end_date, next_occurrence, mode)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, amount, type, category_id, payee, notes, frequency, custom_interval_days, start_date, end_date, next_occurrence, mode, anchor_day, is_variable)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       rec.id,
       rec.amount,
@@ -45,6 +47,8 @@ export async function createRecurring(
       rec.end_date ?? null,
       rec.next_occurrence,
       rec.mode ?? "reminder",
+      rec.anchor_day ?? null,
+      rec.is_variable ?? 0,
     ]
   );
 }
