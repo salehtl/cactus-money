@@ -10,6 +10,62 @@ interface BackupData {
   tags: Record<string, unknown>[];
 }
 
+interface RecurringBackupData {
+  recurring_transactions: Record<string, unknown>[];
+}
+
+/** Import recurring transactions JSON (merge via upsert — existing rules are updated, new ones inserted). */
+export async function importRecurringJSON(db: DbClient, jsonString: string): Promise<number> {
+  const data: RecurringBackupData = JSON.parse(jsonString);
+
+  if (!Array.isArray(data.recurring_transactions) || data.recurring_transactions.length === 0) {
+    throw new Error("Invalid recurring backup — no recurring_transactions found");
+  }
+
+  await db.exec("BEGIN TRANSACTION;");
+  try {
+    let count = 0;
+    for (const rec of data.recurring_transactions) {
+      await db.exec(
+        `INSERT INTO recurring_transactions (id, amount, type, category_id, payee, notes, frequency, custom_interval_days, start_date, end_date, next_occurrence, mode, is_active, anchor_day, is_variable, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           amount = excluded.amount, type = excluded.type, category_id = excluded.category_id,
+           payee = excluded.payee, notes = excluded.notes, frequency = excluded.frequency,
+           custom_interval_days = excluded.custom_interval_days, start_date = excluded.start_date,
+           end_date = excluded.end_date, next_occurrence = excluded.next_occurrence,
+           mode = excluded.mode, is_active = excluded.is_active, anchor_day = excluded.anchor_day,
+           is_variable = excluded.is_variable, updated_at = datetime('now')`,
+        [
+          rec.id,
+          rec.amount,
+          rec.type,
+          rec.category_id ?? null,
+          rec.payee ?? "",
+          rec.notes ?? "",
+          rec.frequency,
+          rec.custom_interval_days ?? null,
+          rec.start_date,
+          rec.end_date ?? null,
+          rec.next_occurrence,
+          rec.mode ?? "reminder",
+          rec.is_active ?? 1,
+          rec.anchor_day ?? null,
+          rec.is_variable ?? 0,
+          rec.created_at ?? new Date().toISOString(),
+          rec.updated_at ?? new Date().toISOString(),
+        ]
+      );
+      count++;
+    }
+    await db.exec("COMMIT;");
+    return count;
+  } catch (e) {
+    await db.exec("ROLLBACK;");
+    throw e;
+  }
+}
+
 export async function importJSON(db: DbClient, jsonString: string): Promise<void> {
   const data: BackupData = normalizeImportData(JSON.parse(jsonString));
 
