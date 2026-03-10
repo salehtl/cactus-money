@@ -2,12 +2,15 @@ import { useRef } from "react";
 import { Button } from "../ui/Button.tsx";
 
 const MAX_FILES = 5;
+const MAX_FILE_SIZE_MB = 15;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 interface PdfImportButtonProps {
   onFilesSelect: (files: File[]) => void;
+  onFilesRejected?: (names: string[]) => void;
 }
 
-export function PdfImportButton({ onFilesSelect }: PdfImportButtonProps) {
+export function PdfImportButton({ onFilesSelect, onFilesRejected }: PdfImportButtonProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -43,8 +46,11 @@ export function PdfImportButton({ onFilesSelect }: PdfImportButtonProps) {
         onChange={(e) => {
           const fileList = e.target.files;
           if (fileList && fileList.length > 0) {
-            const files = Array.from(fileList).slice(0, MAX_FILES);
-            onFilesSelect(files);
+            const all = Array.from(fileList).slice(0, MAX_FILES);
+            const valid = all.filter((f) => f.size <= MAX_FILE_SIZE);
+            const rejected = all.filter((f) => f.size > MAX_FILE_SIZE).map((f) => f.name);
+            if (rejected.length > 0) onFilesRejected?.(rejected);
+            if (valid.length > 0) onFilesSelect(valid);
             e.target.value = "";
           }
         }}

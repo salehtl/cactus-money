@@ -60,7 +60,12 @@ function CashflowPage() {
         title="Cashflow"
         action={
           <div className="flex items-center gap-2">
-            <PdfImportButton onFilesSelect={setPdfFiles} />
+            <PdfImportButton
+                onFilesSelect={setPdfFiles}
+                onFilesRejected={(names) =>
+                  toast(`${names.join(", ")} exceeded 15 MB limit`, "error")
+                }
+              />
             <Button size="sm" onClick={() => setShowAddDialog(true)}>
               + Add
             </Button>

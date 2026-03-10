@@ -9,6 +9,7 @@ import type { LLMConfig } from "./llm-provider.ts";
 
 const PAGES_PER_BATCH = 5;
 const MAX_CONCURRENT = 3;
+const MAX_BUFFER_BYTES = 1024 * 1024; // 1 MB — safety cap on accumulated LLM response
 const RATE_LIMIT_BACKOFF_MS = 2000;
 
 export interface ParseProgress {
@@ -18,6 +19,10 @@ export interface ParseProgress {
   fileName?: string;
   batch?: number;
   totalBatches?: number;
+}
+
+export interface ParseOptions {
+  maxConcurrent?: number;
 }
 
 function buildSystemPrompt(categories: Category[]): string {
@@ -80,6 +85,7 @@ export async function parseStatement(
   config: LLMConfig,
   onProgress?: (progress: ParseProgress) => void,
   onTransaction?: (txn: ParsedTransaction) => void,
+  options?: ParseOptions,
 ): Promise<ParsedTransaction[]> {
   // Step 1: Render PDF to images
   onProgress?.({ message: "Loading PDF...", phase: "rendering", fileName: file.name });
@@ -154,6 +160,14 @@ export async function parseStatement(
       batch.map((img) => img.base64),
       (chunk) => {
         accumulated += chunk;
+        if (accumulated.length > MAX_BUFFER_BYTES) {
+          throw new ImportError(
+            "parse_error",
+            "Response Too Large",
+            "The AI response exceeded the safety limit.",
+            "Try importing fewer pages at once.",
+          );
+        }
         parseOffset = extractStreamedObjects(accumulated, parseOffset, (obj) => {
           const txn = rawToTransaction(obj);
           txn.category_id = txn.category
@@ -192,6 +206,8 @@ export async function parseStatement(
     });
   }
 
+  const maxConcurrent = options?.maxConcurrent ?? MAX_CONCURRENT;
+
   // Run batches with controlled concurrency, re-queuing rate-limited failures.
   // On rate-limit, failed batches are spliced back into the queue and
   // processing drops to sequential for the remainder of the import.
@@ -200,7 +216,7 @@ export async function parseStatement(
 
   while (i < batches.length) {
     if (!rateLimited) {
-      const chunk = batches.slice(i, i + MAX_CONCURRENT);
+      const chunk = batches.slice(i, i + maxConcurrent);
       const settled = await Promise.allSettled(chunk.map(processBatch));
       let failedIndices: number[] | undefined;
 
@@ -236,8 +252,23 @@ export async function parseStatement(
           (e.code === "rate_limited" || e.code === "api_error")
         ) {
           await new Promise((r) => setTimeout(r, RATE_LIMIT_BACKOFF_MS));
-          // Retry once; if it fails again, let it propagate
-          emitBatch(await processBatch(batches[i]));
+          // Retry once; if still rate-limited, signal fallback to UI
+          try {
+            emitBatch(await processBatch(batches[i]));
+          } catch (retryErr) {
+            if (
+              retryErr instanceof ImportError &&
+              (retryErr.code === "rate_limited" || retryErr.code === "api_error")
+            ) {
+              throw new ImportError(
+                "rate_limited_with_fallback",
+                "Rate Limited",
+                retryErr.message,
+                retryErr.suggestion,
+              );
+            }
+            throw retryErr;
+          }
         } else {
           throw e;
         }

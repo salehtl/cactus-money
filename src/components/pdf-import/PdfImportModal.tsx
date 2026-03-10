@@ -6,19 +6,20 @@ import { DatePicker } from "../ui/Calendar.tsx";
 import { CategoryCombo } from "../ui/CategoryCombo.tsx";
 import { useToast } from "../ui/Toast.tsx";
 import { useDb } from "../../context/DbContext.tsx";
-import { getSetting } from "../../db/queries/settings.ts";
+import { getSetting, setSetting } from "../../db/queries/settings.ts";
 import { parseStatement } from "../../lib/pdf-import/parse-statement.ts";
 import { getPageCount } from "../../lib/pdf-import/pdf-to-images.ts";
 import { bulkInsertTransactions, getExistingFingerprints, txnFingerprint } from "../../lib/pdf-import/bulk-insert.ts";
 import { ImportError } from "../../lib/pdf-import/errors.ts";
 import type { ProviderId } from "../../lib/pdf-import/llm-provider.ts";
-import { DEFAULT_PROVIDER, PROVIDER_DEFAULTS } from "../../lib/pdf-import/providers/index.ts";
+import { DEFAULT_PROVIDER, PROVIDER_DEFAULTS, PROVIDER_FALLBACK_MODELS, getModelLabel } from "../../lib/pdf-import/providers/index.ts";
 import { formatCurrency } from "../../lib/format.ts";
 import type { Category } from "../../types/database.ts";
 import type { ParsedTransaction, ImportState, ImportFile } from "../../lib/pdf-import/types.ts";
 import type { ParseProgress } from "../../lib/pdf-import/parse-statement.ts";
 
 const MAX_TOTAL_PAGES = 50;
+const MAX_TRANSACTIONS = 500;
 
 interface PdfImportModalProps {
   open: boolean;
@@ -131,6 +132,7 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
       const updatedFiles = importFiles.map((f) => ({ ...f }));
       filesRef.current = updatedFiles;
       const allTransactions: ParsedTransaction[] = [];
+      let txnCapReached = false;
 
       function syncFiles() {
         setState((prev) => {
@@ -174,6 +176,12 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
             },
             (txn) => {
               if (!isCurrent()) return;
+              if (txnCapReached) return;
+              if (allTransactions.length + txnQueueRef.current.length >= MAX_TRANSACTIONS) {
+                txnCapReached = true;
+                toast(`Only the first ${MAX_TRANSACTIONS} transactions are shown. The rest were trimmed for safety.`, "warning");
+                return;
+              }
               txn.sourceFile = importFile.file.name;
               txnQueueRef.current.push(txn);
               startDraining();
@@ -187,6 +195,21 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
           syncFiles();
         } catch (e) {
           flushQueue();
+
+          if (e instanceof ImportError && e.code === "rate_limited_with_fallback") {
+            const currentModel = model || PROVIDER_DEFAULTS[providerId];
+            const fallback = PROVIDER_FALLBACK_MODELS[providerId]?.[currentModel];
+            if (!isCurrent()) return;
+            setState({
+              step: "rate-limited",
+              currentModel,
+              fallbackModel: fallback ?? "",
+              provider: providerId,
+              files: updatedFiles,
+              transactions: allTransactions,
+            });
+            return;
+          }
 
           if (e instanceof ImportError && (e.code === "no_api_key" || e.code === "invalid_api_key" || e.code === "credits_exhausted")) {
             // Fatal errors — stop everything
@@ -267,7 +290,9 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
         ? "Importing Statement" + (fileCount > 1 ? "s" : "")
         : state.step === "streaming"
           ? "Analyzing Statement" + (fileCount > 1 ? "s" : "")
-          : state.step === "reviewing" || state.step === "importing"
+          : state.step === "rate-limited"
+            ? "Rate Limited"
+            : state.step === "reviewing" || state.step === "importing"
             ? "Review Transactions"
             : state.step === "done"
               ? "Import Complete"
@@ -309,6 +334,24 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
           categories={categories}
           files={state.files}
           singleFile={isSingleFile}
+        />
+      )}
+      {state.step === "rate-limited" && (
+        <RateLimitedView
+          currentModel={state.currentModel}
+          fallbackModel={state.fallbackModel}
+          provider={state.provider}
+          onSwitchModel={() => {
+            if (!state.fallbackModel) return;
+            const rid = runIdRef.current;
+            setSetting(db, "llm_model", state.fallbackModel).then(() => {
+              if (rid !== runIdRef.current) return;
+              toast(`Switched to ${getModelLabel(state.provider, state.fallbackModel)}`);
+              setState({ step: "idle" });
+            });
+          }}
+          onRetry={() => setState({ step: "idle" })}
+          onClose={handleClose}
         />
       )}
       {(state.step === "reviewing" || state.step === "importing") && (
@@ -961,6 +1004,67 @@ const COLOR_CLASSES: Record<string, { bg: string; text: string }> = {
   danger: { bg: "bg-danger/8", text: "text-danger" },
   "text-muted": { bg: "bg-text-muted/8", text: "text-text-muted" },
 };
+
+function RateLimitedView({
+  currentModel,
+  fallbackModel,
+  provider,
+  onSwitchModel,
+  onRetry,
+  onClose,
+}: {
+  currentModel: string;
+  fallbackModel: string;
+  provider: ProviderId;
+  onSwitchModel: () => void;
+  onRetry: () => void;
+  onClose: () => void;
+}) {
+  const currentLabel = getModelLabel(provider, currentModel);
+  const fallbackLabel = fallbackModel ? getModelLabel(provider, fallbackModel) : null;
+
+  return (
+    <div className="flex flex-col items-center justify-center py-8 gap-3 animate-slide-up">
+      <div className="w-14 h-14 rounded-full flex items-center justify-center bg-warning/10 text-warning">
+        <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      </div>
+
+      <div className="text-center max-w-xs">
+        <p className="text-sm font-bold mb-1.5">Rate Limited</p>
+        <p className="text-xs text-text-muted leading-relaxed">
+          The API rate limit was hit while using {currentLabel}. Concurrency was already reduced.
+        </p>
+      </div>
+
+      <div className="flex items-start gap-2 bg-surface-alt rounded-lg px-3 py-2.5 max-w-xs w-full">
+        <svg className="w-3.5 h-3.5 text-text-light shrink-0 mt-px" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
+        </svg>
+        <p className="text-[11px] text-text-muted leading-relaxed">
+          {fallbackLabel
+            ? `You can switch to ${fallbackLabel} which has higher rate limits, or wait a minute and retry with ${currentLabel}.`
+            : `Wait a minute and retry. ${currentLabel} is already the most affordable model for this provider.`}
+        </p>
+      </div>
+
+      <div className="flex gap-2 mt-2">
+        <Button variant="secondary" size="sm" onClick={onClose}>Close</Button>
+        <Button variant="secondary" size="sm" onClick={onRetry}>Wait & Retry</Button>
+        {fallbackLabel && (
+          <Button size="sm" onClick={onSwitchModel}>
+            Switch to {fallbackLabel}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ErrorView({
   code,

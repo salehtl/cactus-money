@@ -1,4 +1,5 @@
 import type { ImportErrorCode } from "./errors.ts";
+import type { ProviderId } from "./llm-provider.ts";
 import type { ParseProgress } from "./parse-statement.ts";
 
 export interface ParsedTransaction {
@@ -27,6 +28,7 @@ export type ImportState =
   | { step: "file-queue"; files: ImportFile[] }
   | { step: "processing"; progress: ParseProgress; files: ImportFile[] }
   | { step: "streaming"; transactions: ParsedTransaction[]; progress: ParseProgress; files: ImportFile[] }
+  | { step: "rate-limited"; currentModel: string; fallbackModel: string; provider: ProviderId; files: ImportFile[]; transactions: ParsedTransaction[] }
   | { step: "reviewing"; transactions: ParsedTransaction[]; files: ImportFile[] }
   | { step: "importing"; transactions: ParsedTransaction[]; files: ImportFile[] }
   | { step: "done"; count: number; fileCount: number }

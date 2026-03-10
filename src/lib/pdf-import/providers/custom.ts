@@ -1,7 +1,7 @@
 import { ImportError } from "../errors.ts";
 import type { LLMProvider } from "../llm-provider.ts";
 import { readSSEStream } from "./sse.ts";
-import { classifyHttpError, openaiExtractText, EXTRACT_PROMPT } from "./shared.ts";
+import { classifyHttpError, openaiExtractText, throwNetworkError, FETCH_TIMEOUT_MS, EXTRACT_PROMPT } from "./shared.ts";
 
 const ERROR_MAPPINGS = [
   { status: 401, code: "invalid_api_key" as const, title: "Invalid API Key", message: "The endpoint rejected the API key.", suggestion: "Check your API key in Settings." },
@@ -65,14 +65,10 @@ export const customProvider: LLMProvider = {
         method: "POST",
         headers,
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
-    } catch {
-      throw new ImportError(
-        "network_error",
-        "Connection Failed",
-        "Could not reach the custom endpoint.",
-        "Check that the base URL is correct and the server is running.",
-      );
+    } catch (e) {
+      throwNetworkError(e, "Could not reach the custom endpoint.", "Check that the base URL is correct and the server is running.");
     }
 
     if (!response.ok) {
