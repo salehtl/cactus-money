@@ -3,6 +3,7 @@ export type ImportErrorCode =
   | "invalid_api_key"
   | "credits_exhausted"
   | "rate_limited"
+  | "rate_limited_with_fallback"
   | "network_error"
   | "pdf_error"
   | "parse_error"

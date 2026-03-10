@@ -20,6 +20,10 @@ export interface ParseProgress {
   totalBatches?: number;
 }
 
+export interface ParseOptions {
+  maxConcurrent?: number;
+}
+
 function buildSystemPrompt(categories: Category[]): string {
   const expense = categories
     .filter((c) => !c.is_income && !c.parent_id)
@@ -80,6 +84,7 @@ export async function parseStatement(
   config: LLMConfig,
   onProgress?: (progress: ParseProgress) => void,
   onTransaction?: (txn: ParsedTransaction) => void,
+  options?: ParseOptions,
 ): Promise<ParsedTransaction[]> {
   // Step 1: Render PDF to images
   onProgress?.({ message: "Loading PDF...", phase: "rendering", fileName: file.name });
@@ -195,12 +200,56 @@ export async function parseStatement(
     return batchTxns;
   }
 
-  // Run batches with max concurrency
+  const maxConcurrent = options?.maxConcurrent ?? MAX_CONCURRENT;
+
+  // Run batches with max concurrency, with rate-limit retry at reduced concurrency.
+  // Uses a while loop with manual index to avoid stepping bugs when concurrency changes.
   const results: ParsedTransaction[][] = [];
-  for (let i = 0; i < batches.length; i += MAX_CONCURRENT) {
-    const chunk = batches.slice(i, i + MAX_CONCURRENT);
-    const chunkResults = await Promise.all(chunk.map(processBatch));
-    results.push(...chunkResults);
+  let concurrency = maxConcurrent;
+  let i = 0;
+
+  while (i < batches.length) {
+    if (concurrency > 1) {
+      // Parallel path: use allSettled to keep successful results even if one batch fails
+      const chunk = batches.slice(i, i + concurrency);
+      const settled = await Promise.allSettled(chunk.map(processBatch));
+      let hadRateLimit = false;
+      for (const r of settled) {
+        if (r.status === "fulfilled") {
+          results.push(r.value);
+        } else if (
+          r.reason instanceof ImportError &&
+          (r.reason.code === "rate_limited" || r.reason.code === "api_error")
+        ) {
+          hadRateLimit = true;
+        } else if (r.reason) {
+          throw r.reason;
+        }
+      }
+      if (hadRateLimit) concurrency = 1;
+      i += chunk.length;
+    } else {
+      // Sequential path (concurrency = 1): one batch at a time
+      try {
+        const result = await processBatch(batches[i]);
+        results.push(result);
+        i++;
+      } catch (e) {
+        if (
+          e instanceof ImportError &&
+          (e.code === "rate_limited" || e.code === "api_error")
+        ) {
+          // Still rate limited at concurrency 1 — signal fallback to UI
+          throw new ImportError(
+            "rate_limited_with_fallback",
+            "Rate Limited",
+            e.message,
+            e.suggestion,
+          );
+        }
+        throw e;
+      }
+    }
   }
 
   for (const batch of results) {
