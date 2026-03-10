@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Personal finance PWA (YNAB-like). Local-first, no server dependency. Currency: AED (UAE Dirham). Light theme only.
 
-## Changelog (IMPORTANT)
+## Changelog
 
-**CHANGELOG.md MUST be updated before any push or merge to master.** Every user-facing change — feature, fix, or breaking change — must have a corresponding entry before the work is considered complete. Follow [Semantic Versioning](https://semver.org/):
+**CHANGELOG.md must be updated prior to any push or merge to master.** Every user-facing change — feature, fix, or breaking change — must have a corresponding entry before the work is considered complete. Follow [Semantic Versioning](https://semver.org/):
 
 - **MAJOR** — incompatible changes (schema migrations that lose data, removed features)
 - **MINOR** — new features, non-breaking enhancements
@@ -34,6 +34,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/) (`Added`, `Changed`, `Fi
 - `bun run dev` — Start dev server
 - `bun run build` — Production build
 - `bun run preview` — Preview production build
+- `bun run test` — Run tests (Vitest)
+- `bun run test:watch` — Run tests in watch mode
+
+## Testing
+
+- **Runner:** Vitest (separate `vitest.config.ts` — NOT merged into vite.config.ts due to middleware plugin conflicts)
+- **DOM:** happy-dom
+- **DB tests:** better-sqlite3 in-memory SQLite via `src/test/db-helpers.ts` (`createTestDb()`)
+- **Component tests:** @testing-library/react + `src/test/render-helpers.tsx` (`renderWithProviders()`)
+- **Globals:** `globals: true` — do NOT import `describe`, `it`, `expect`, `vi` from vitest
+- **Files:** Colocated `*.test.ts` / `*.test.tsx` next to source
+- **Time-dependent tests:** Always use `vi.setSystemTime()` — never assert against live `new Date()`
+- **DB helper gotcha:** Schema creation disables `foreign_keys` (table ordering issue), re-enables after. WAL pragma is no-op on `:memory:` — don't add it.
 
 ## Architecture
 
