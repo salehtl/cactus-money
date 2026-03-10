@@ -47,7 +47,7 @@ export const PROVIDER_KEY_PLACEHOLDERS: Record<ProviderId, string> = {
 
 /** Links to each provider's rate limit documentation. */
 export const PROVIDER_RATE_LIMIT_URLS: Record<Exclude<ProviderId, "custom">, string> = {
-  anthropic: "https://docs.anthropic.com/en/docs/about-claude/models",
+  anthropic: "https://docs.anthropic.com/en/api/rate-limits",
   openai: "https://platform.openai.com/docs/guides/rate-limits",
   gemini: "https://ai.google.dev/gemini-api/docs/rate-limits",
 };
