@@ -6,6 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Personal finance PWA (YNAB-like). Local-first, no server dependency. Currency: AED (UAE Dirham). Light theme only.
 
+## Changelog (IMPORTANT)
+
+**CHANGELOG.md MUST be kept up to date.** Every user-facing change — feature, fix, or breaking change — must have a corresponding entry before the work is considered complete. Follow [Semantic Versioning](https://semver.org/):
+
+- **MAJOR** — incompatible changes (schema migrations that lose data, removed features)
+- **MINOR** — new features, non-breaking enhancements
+- **PATCH** — bug fixes, performance improvements, internal refactors
+
+Format: [Keep a Changelog](https://keepachangelog.com/) (`Added`, `Changed`, `Fixed`, `Removed` sections under each version). Unreleased changes go under `## [Unreleased]` until a version is cut.
+
 ## Stack
 
 - Runtime: Bun
