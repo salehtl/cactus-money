@@ -9,6 +9,7 @@ import type { LLMConfig } from "./llm-provider.ts";
 
 const PAGES_PER_BATCH = 5;
 const MAX_CONCURRENT = 3;
+const MAX_BUFFER_BYTES = 1024 * 1024; // 1 MB — safety cap on accumulated LLM response
 
 export interface ParseProgress {
   message: string;
@@ -151,6 +152,14 @@ export async function parseStatement(
       batch.map((img) => img.base64),
       (chunk) => {
         accumulated += chunk;
+        if (accumulated.length > MAX_BUFFER_BYTES) {
+          throw new ImportError(
+            "parse_error",
+            "Response Too Large",
+            "The AI response exceeded the safety limit.",
+            "Try importing fewer pages at once.",
+          );
+        }
         parseOffset = extractStreamedObjects(accumulated, parseOffset, (obj) => {
           const txn = rawToTransaction(obj);
           txn.category_id = txn.category

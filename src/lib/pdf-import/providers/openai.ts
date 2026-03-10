@@ -51,12 +51,15 @@ export const openaiProvider: LLMProvider = {
           "Authorization": `Bearer ${config.apiKey}`,
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(60_000),
       });
-    } catch {
+    } catch (e) {
       throw new ImportError(
         "network_error",
-        "Connection Failed",
-        "Could not reach the OpenAI API.",
+        (e as Error).name === "TimeoutError" ? "Request Timed Out" : "Connection Failed",
+        (e as Error).name === "TimeoutError"
+          ? "The API did not respond within 60 seconds."
+          : "Could not reach the OpenAI API.",
         "Check your internet connection or proxy URL in Settings.",
       );
     }

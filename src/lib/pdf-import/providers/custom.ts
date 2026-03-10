@@ -65,12 +65,15 @@ export const customProvider: LLMProvider = {
         method: "POST",
         headers,
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(60_000),
       });
-    } catch {
+    } catch (e) {
       throw new ImportError(
         "network_error",
-        "Connection Failed",
-        "Could not reach the custom endpoint.",
+        (e as Error).name === "TimeoutError" ? "Request Timed Out" : "Connection Failed",
+        (e as Error).name === "TimeoutError"
+          ? "The endpoint did not respond within 60 seconds."
+          : "Could not reach the custom endpoint.",
         "Check that the base URL is correct and the server is running.",
       );
     }

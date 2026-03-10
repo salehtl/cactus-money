@@ -19,6 +19,7 @@ import type { ParsedTransaction, ImportState, ImportFile } from "../../lib/pdf-i
 import type { ParseProgress } from "../../lib/pdf-import/parse-statement.ts";
 
 const MAX_TOTAL_PAGES = 50;
+const MAX_TRANSACTIONS = 500;
 
 interface PdfImportModalProps {
   open: boolean;
@@ -217,10 +218,21 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
         const maxDate = dates.reduce((a, b) => (a > b ? a : b));
         const existing = await getExistingFingerprints(db, minDate, maxDate);
 
-        const marked = allTransactions.map((t) => {
+        let truncated = false;
+        let txns = allTransactions;
+        if (txns.length > MAX_TRANSACTIONS) {
+          txns = txns.slice(0, MAX_TRANSACTIONS);
+          truncated = true;
+        }
+
+        const marked = txns.map((t) => {
           const isDup = existing.has(txnFingerprint(t.date, t.amount, t.payee));
           return isDup ? { ...t, duplicate: true, selected: false } : t;
         });
+
+        if (truncated) {
+          toast(`Only the first ${MAX_TRANSACTIONS} transactions are shown. The rest were trimmed for safety.`, "warning");
+        }
 
         setState({ step: "reviewing", transactions: marked, files: updatedFiles });
       } else {
