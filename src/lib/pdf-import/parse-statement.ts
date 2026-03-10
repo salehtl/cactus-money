@@ -9,7 +9,7 @@ import type { LLMConfig } from "./llm-provider.ts";
 
 export const PAGES_PER_BATCH = 5;
 const MAX_CONCURRENT = 3;
-const MAX_BUFFER_BYTES = 1024 * 1024; // 1 MB — safety cap on accumulated LLM response
+const MAX_BUFFER_BYTES = 4 * 1024 * 1024; // 4 MB — safety cap on accumulated LLM response
 const INTER_BATCH_DELAY_MS = 1000;
 const INITIAL_BACKOFF_MS = 2000;
 const MAX_BACKOFF_MS = 30000;

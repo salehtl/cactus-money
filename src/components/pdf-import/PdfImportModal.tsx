@@ -36,6 +36,7 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
   const txnQueueRef = useRef<ParsedTransaction[]>([]);
   const drainTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const filesRef = useRef<ImportFile[]>([]);
+  const streamedTxnsRef = useRef<ParsedTransaction[]>([]);
   const [modelLabel, setModelLabel] = useState("");
 
   const isSingleFile = files.length === 1;
@@ -106,6 +107,7 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
     const runId = ++runIdRef.current;
     const isCurrent = () => runId === runIdRef.current;
     txnQueueRef.current = [];
+    streamedTxnsRef.current = [];
 
     try {
       const [provider, apiKey, model, baseUrl] = await Promise.all([
@@ -186,6 +188,7 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
                 return;
               }
               txn.sourceFile = importFile.file.name;
+              streamedTxnsRef.current.push(txn);
               txnQueueRef.current.push(txn);
               startDraining();
             },
@@ -198,6 +201,12 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
           syncFiles();
         } catch (e) {
           flushQueue();
+
+          // Recover any transactions streamed before the error
+          if (streamedTxnsRef.current.length > allTransactions.length) {
+            const recovered = streamedTxnsRef.current.slice(allTransactions.length);
+            allTransactions.push(...recovered);
+          }
 
           if (e instanceof ImportError && e.code === "rate_limited_with_fallback") {
             const currentModel = model || PROVIDER_DEFAULTS[providerId];
@@ -236,6 +245,16 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
 
       if (!isCurrent()) return;
 
+      const failedFiles = updatedFiles.filter((f) => f.status === "error");
+
+      // Warn if some files had errors but we still recovered transactions
+      if (failedFiles.length > 0 && allTransactions.length > 0) {
+        toast(
+          "Some pages could not be fully processed. Please review the extracted transactions carefully.",
+          "warning",
+        );
+      }
+
       if (allTransactions.length > 0) {
         // Mark duplicates against existing DB transactions
         const dates = allTransactions.map((t) => t.date).filter(Boolean);
@@ -251,7 +270,6 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
         setState({ step: "reviewing", transactions: marked, files: updatedFiles });
       } else {
         // All files failed or no transactions found
-        const failedFiles = updatedFiles.filter((f) => f.status === "error");
         if (failedFiles.length === updatedFiles.length) {
           setState({
             step: "error",
