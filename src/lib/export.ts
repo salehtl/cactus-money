@@ -1,5 +1,6 @@
 import type { DbClient } from "../db/client.ts";
 import { ANCHOR_DAY_FREQUENCIES } from "../db/schema.ts";
+import { getRecurringTransactions } from "../db/queries/recurring.ts";
 
 export async function exportJSON(db: DbClient): Promise<string> {
   const [categories, transactions, recurring, settings, tags] =
@@ -117,6 +118,15 @@ export function normalizeImportData(data: any): any {
     }
   }
   return data;
+}
+
+export async function exportRecurringJSON(db: DbClient): Promise<string> {
+  const rows = await getRecurringTransactions(db);
+  const data = {
+    exported_at: new Date().toISOString(),
+    recurring_transactions: rows,
+  };
+  return JSON.stringify(data, null, 2);
 }
 
 export function downloadFile(content: string, filename: string, mimeType: string) {

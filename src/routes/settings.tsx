@@ -7,7 +7,7 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog.tsx";
 import { useToast } from "../components/ui/Toast.tsx";
 import { useDb } from "../context/DbContext.tsx";
 import { useCategories } from "../hooks/useCategories.ts";
-import { exportJSON, downloadFile } from "../lib/export.ts";
+import { exportJSON, exportRecurringJSON, downloadFile } from "../lib/export.ts";
 import { CSVExportModal } from "../components/CSVExportModal.tsx";
 import { importJSON } from "../lib/import.ts";
 import {
@@ -66,6 +66,16 @@ function SettingsPage() {
       await setSetting(db, "last_export", now);
       setLastExport(now);
       toast("JSON exported successfully");
+    } catch {
+      toast("Export failed", "error");
+    }
+  }
+
+  async function handleExportRecurring() {
+    try {
+      const json = await exportRecurringJSON(db);
+      downloadFile(json, `recurring-${new Date().toISOString().split("T")[0]}.json`, "application/json");
+      toast("Recurring transactions exported");
     } catch {
       toast("Export failed", "error");
     }
@@ -216,6 +226,9 @@ function SettingsPage() {
             </Button>
             <Button variant="secondary" size="sm" onClick={() => setShowCSVExport(true)}>
               Export CSV
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleExportRecurring}>
+              Export Recurring
             </Button>
             <Button variant="secondary" size="sm" onClick={handleImportSelect}>
               Import JSON
