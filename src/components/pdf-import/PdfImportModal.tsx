@@ -175,6 +175,7 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
             },
             (txn) => {
               if (!isCurrent()) return;
+              if (allTransactions.length + txnQueueRef.current.length >= MAX_TRANSACTIONS) return;
               txn.sourceFile = importFile.file.name;
               txnQueueRef.current.push(txn);
               startDraining();
