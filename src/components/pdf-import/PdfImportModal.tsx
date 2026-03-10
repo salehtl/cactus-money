@@ -7,12 +7,12 @@ import { CategoryCombo } from "../ui/CategoryCombo.tsx";
 import { useToast } from "../ui/Toast.tsx";
 import { useDb } from "../../context/DbContext.tsx";
 import { getSetting, setSetting } from "../../db/queries/settings.ts";
-import { parseStatement } from "../../lib/pdf-import/parse-statement.ts";
+import { parseStatement, PAGES_PER_BATCH } from "../../lib/pdf-import/parse-statement.ts";
 import { getPageCount } from "../../lib/pdf-import/pdf-to-images.ts";
 import { bulkInsertTransactions, getExistingFingerprints, txnFingerprint } from "../../lib/pdf-import/bulk-insert.ts";
 import { ImportError } from "../../lib/pdf-import/errors.ts";
 import type { ProviderId } from "../../lib/pdf-import/llm-provider.ts";
-import { DEFAULT_PROVIDER, PROVIDER_DEFAULTS, PROVIDER_FALLBACK_MODELS, getModelLabel } from "../../lib/pdf-import/providers/index.ts";
+import { DEFAULT_PROVIDER, PROVIDER_DEFAULTS, PROVIDER_FALLBACK_MODELS, PROVIDER_RATE_LIMIT_URLS, getModelLabel } from "../../lib/pdf-import/providers/index.ts";
 import { formatCurrency } from "../../lib/format.ts";
 import type { Category } from "../../types/database.ts";
 import type { ParsedTransaction, ImportState, ImportFile } from "../../lib/pdf-import/types.ts";
@@ -461,6 +461,20 @@ function FileQueueView({
         )}
       </div>
 
+      {/* Rate limit notice for large imports */}
+      {allCounted && totalPages > PAGES_PER_BATCH && (
+        <div className="flex items-start gap-2 bg-surface-alt rounded-lg px-3 py-2 mb-3 text-[11px] text-text-muted leading-relaxed">
+          <svg className="w-3.5 h-3.5 shrink-0 mt-px text-text-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <span>
+            Large documents may hit your provider's API rate limit. If this happens, the import will automatically retry with backoff.
+          </span>
+        </div>
+      )}
+
       {/* Privacy notice */}
       <p className="text-[11px] text-text-muted mb-4">
         Your statement data will be sent to Anthropic for processing.{" "}
@@ -802,6 +816,11 @@ function StreamingView({
               style={{ width: `${((progress.batch ?? 0) / progress.totalBatches) * 100}%` }}
             />
           </div>
+          {progress.batch === 0 && (
+            <p className="text-[10px] text-text-light mt-1.5">
+              Processing {progress.totalBatches} batches — large imports may be slowed by API rate limits.
+            </p>
+          )}
         </div>
       )}
 
@@ -1057,6 +1076,22 @@ function RateLimitedView({
             : `Wait a minute and retry. ${currentLabel} is already the most affordable model for this provider.`}
         </p>
       </div>
+
+      {provider !== "custom" && (
+        <a
+          href={PROVIDER_RATE_LIMIT_URLS[provider]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
+        >
+          View rate limits
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
+      )}
 
       <div className="flex gap-2 mt-2">
         <Button variant="secondary" size="sm" onClick={onClose}>Close</Button>

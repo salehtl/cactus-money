@@ -7,10 +7,18 @@ import { extractStreamedObjects } from "./stream-parser.ts";
 import { getProvider } from "./providers/index.ts";
 import type { LLMConfig } from "./llm-provider.ts";
 
-const PAGES_PER_BATCH = 5;
+export const PAGES_PER_BATCH = 5;
 const MAX_CONCURRENT = 3;
 const MAX_BUFFER_BYTES = 1024 * 1024; // 1 MB — safety cap on accumulated LLM response
-const RATE_LIMIT_BACKOFF_MS = 2000;
+const INTER_BATCH_DELAY_MS = 1000;
+const INITIAL_BACKOFF_MS = 2000;
+const MAX_BACKOFF_MS = 30000;
+const MAX_ATTEMPTS = 4;
+
+function getBackoff(attempt: number): number {
+  const base = Math.min(INITIAL_BACKOFF_MS * 2 ** attempt, MAX_BACKOFF_MS);
+  return base + Math.random() * base * 0.5;
+}
 
 export interface ParseProgress {
   message: string;
@@ -257,39 +265,38 @@ export async function parseStatement(
         // streamed before erroring will be deduped by deduplicate() at the end.
         const failed = failedIndices.map((j) => chunk[j]);
         batches.splice(i, 0, ...failed);
-        await sleep(RATE_LIMIT_BACKOFF_MS);
+        await sleep(getBackoff(0));
+      } else if (i < batches.length) {
+        await sleep(INTER_BATCH_DELAY_MS);
       }
     } else {
-      // Sequential path with backoff between all batches.
+      // Sequential path with exponential backoff retries.
       // lastEmitted tracks how many txns were streamed even on failure,
       // so retries skip re-emitting them.
       const batch = batches[i];
-      try {
-        commitBatch((await processBatch(batch)).txns);
-      } catch (e) {
-        if (isRetryable(e)) {
-          const skipEmit = lastEmitted;
-          await sleep(RATE_LIMIT_BACKOFF_MS);
-          try {
-            commitBatch((await processBatch(batch, skipEmit)).txns);
-          } catch (retryErr) {
-            if (isRetryable(retryErr)) {
-              throw new ImportError(
-                "rate_limited_with_fallback",
-                "Rate Limited",
-                retryErr.message,
-                retryErr.suggestion,
-              );
-            }
-            throw retryErr;
+      let succeeded = false;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const skipEmit = attempt > 0 ? lastEmitted : 0;
+        try {
+          commitBatch((await processBatch(batch, skipEmit)).txns);
+          succeeded = true;
+          break;
+        } catch (e) {
+          if (!isRetryable(e)) throw e;
+          if (attempt === MAX_RETRIES) {
+            throw new ImportError(
+              "rate_limited_with_fallback",
+              "Rate Limited",
+              (e as ImportError).message,
+              (e as ImportError).suggestion,
+            );
           }
-        } else {
-          throw e;
+          await sleep(getBackoff(attempt));
         }
       }
       i++;
-      if (i < batches.length) {
-        await sleep(RATE_LIMIT_BACKOFF_MS);
+      if (succeeded && i < batches.length) {
+        await sleep(INTER_BATCH_DELAY_MS);
       }
     }
   }
