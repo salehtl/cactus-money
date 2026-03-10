@@ -60,15 +60,16 @@ export function SingleMonthView({
   onDuplicateRow,
   onCreateCategory,
 }: SingleMonthViewProps) {
-  const reviewCount = useMemo(
-    () =>
-      [...incomeGroups, ...expenseGroups]
-        .flatMap((g) => g.rows)
-        .filter((r) => r.status === "review").length,
-    [incomeGroups, expenseGroups]
-  );
-
-  const firstReviewRef = useRef<HTMLDivElement>(null);
+  const reviewCount = useMemo(() => {
+    let count = 0;
+    for (const group of incomeGroups)
+      for (const row of group.rows)
+        if (row.status === "review") count++;
+    for (const group of expenseGroups)
+      for (const row of group.rows)
+        if (row.status === "review") count++;
+    return count;
+  }, [incomeGroups, expenseGroups]);
 
   return (
     <div className="space-y-5">
@@ -96,10 +97,7 @@ export function SingleMonthView({
       </div>
 
       {/* Review banner */}
-      <ReviewBanner
-        count={reviewCount}
-        onReview={() => firstReviewRef.current?.scrollIntoView({ behavior: "smooth" })}
-      />
+      <ReviewBanner count={reviewCount} />
 
       {/* Income section */}
       <TableSection
@@ -140,23 +138,14 @@ export function SingleMonthView({
 
 // --- Review banner ---
 
-function ReviewBanner({ count, onReview }: { count: number; onReview: () => void }) {
+function ReviewBanner({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-warning/10 border border-warning/20 rounded-xl text-sm">
-      <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-warning animate-pulse shrink-0" />
-        <span className="text-text">
-          <strong>{count}</strong> recurring {count === 1 ? "item needs" : "items need"} updated amounts
-        </span>
-      </div>
-      <button
-        type="button"
-        onClick={onReview}
-        className="text-warning font-semibold hover:underline cursor-pointer shrink-0"
-      >
-        Review
-      </button>
+    <div className="flex items-center gap-3 px-4 py-2.5 bg-warning/10 border border-warning/20 rounded-xl text-sm">
+      <span className="w-2 h-2 rounded-full bg-warning animate-pulse shrink-0" />
+      <span className="text-text">
+        <strong>{count}</strong> recurring {count === 1 ? "item needs" : "items need"} updated amounts
+      </span>
     </div>
   );
 }
@@ -405,7 +394,7 @@ function ItemRow({
   const [editAmount, setEditAmount] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
-  const [editStatus, setEditStatus] = useState<"planned" | "confirmed">("confirmed");
+  const [editStatus, setEditStatus] = useState<"planned" | "confirmed" | "review">("confirmed");
   const [editType, setEditType] = useState<"income" | "expense">("expense");
   const editRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -747,7 +736,7 @@ function InlineAddRow({
     setStatus(status === "planned" ? "confirmed" : "planned");
   }
 
-  function reset() {
+  function resetFields() {
     setPayee("");
     setAmount("");
     setDate(getToday());
@@ -756,6 +745,10 @@ function InlineAddRow({
     setStatus("confirmed");
     setStatusManual(false);
     setGroupName("");
+  }
+
+  function reset() {
+    resetFields();
     setActive(false);
   }
 
@@ -777,14 +770,7 @@ function InlineAddRow({
         : {}),
     });
     setSaving(false);
-    setPayee("");
-    setAmount("");
-    setDate(getToday());
-    setCategoryId("");
-    setFrequency("");
-    setStatus("confirmed");
-    setStatusManual(false);
-    setGroupName("");
+    resetFields();
     requestAnimationFrame(() => payeeRef.current?.focus());
   }
 

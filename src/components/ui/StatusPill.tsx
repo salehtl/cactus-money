@@ -1,5 +1,26 @@
 export type TransactionStatus = "planned" | "confirmed" | "review";
 
+const STATUS_CONFIG = {
+  planned: {
+    className: "border border-dashed border-border-dark text-text-light hover:border-accent hover:text-accent",
+    dotClass: "bg-text-light/50",
+    label: "Plan",
+    title: "Mark as confirmed",
+  },
+  confirmed: {
+    className: "bg-success/10 text-success hover:bg-success/20",
+    dotClass: "bg-success",
+    label: "Conf",
+    title: "Mark as planned",
+  },
+  review: {
+    className: "bg-warning/10 text-warning border border-dashed border-warning/30 hover:bg-warning/20",
+    dotClass: "bg-warning",
+    label: "Review",
+    title: "Needs amount review — click to confirm",
+  },
+} as const;
+
 export function StatusPill({
   status,
   onClick,
@@ -9,26 +30,7 @@ export function StatusPill({
   onClick: () => void;
   disabled?: boolean;
 }) {
-  const config = {
-    planned: {
-      className: "border border-dashed border-border-dark text-text-light hover:border-accent hover:text-accent",
-      dotClass: "bg-text-light/50",
-      label: "Plan",
-      title: "Mark as confirmed",
-    },
-    confirmed: {
-      className: "bg-success/10 text-success hover:bg-success/20",
-      dotClass: "bg-success",
-      label: "Conf",
-      title: "Mark as planned",
-    },
-    review: {
-      className: "bg-warning/10 text-warning border border-dashed border-warning/30 hover:bg-warning/20",
-      dotClass: "bg-warning",
-      label: "Review",
-      title: "Needs amount review — click to confirm",
-    },
-  }[status];
+  const config = STATUS_CONFIG[status];
 
   return (
     <button

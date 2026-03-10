@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useDb } from "../context/DbContext.tsx";
 import { getTransactionsForMonth } from "../db/queries/cashflow.ts";
 import { createTransaction, updateTransaction, deleteTransaction } from "../db/queries/transactions.ts";
@@ -19,10 +19,14 @@ export function useCashflow(month: string, groupBy: GroupBy = "none") {
     plannedExpenses: 0, confirmedExpenses: 0,
   });
   const [loading, setLoading] = useState(true);
+  const populatedMonthRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
-    // Auto-populate planned transactions from recurring rules
-    await populateFutureMonth(db, month);
+    // Auto-populate planned transactions from recurring rules (once per month)
+    if (populatedMonthRef.current !== month) {
+      await populateFutureMonth(db, month);
+      populatedMonthRef.current = month;
+    }
 
     const txns = await getTransactionsForMonth(db, month);
     setTransactions(txns);
@@ -38,7 +42,10 @@ export function useCashflow(month: string, groupBy: GroupBy = "none") {
     refresh();
     const unsubs = [
       onDbEvent("transactions-changed", refresh),
-      onDbEvent("recurring-changed", refresh),
+      onDbEvent("recurring-changed", () => {
+        populatedMonthRef.current = null; // force re-population
+        refresh();
+      }),
       onDbEvent("categories-changed", refresh),
     ];
     return () => unsubs.forEach((fn) => fn());
@@ -102,24 +109,34 @@ export function useCashflow(month: string, groupBy: GroupBy = "none") {
 
   const editTransaction = useCallback(
     async (id: string, updates: Parameters<typeof updateTransaction>[2]) => {
-      await updateTransaction(db, id, updates);
-
-      // Auto-confirm review transactions when edited
+      // Check if this is a review transaction that should be auto-confirmed
+      let shouldAutoConfirm = false;
+      let recurringId: string | null = null;
       if (!updates.status) {
-        const txn = transactions.find((t) => t.id === id);
-        if (txn?.status === "review") {
-          await updateTransaction(db, id, { status: "confirmed" });
-          // Update the recurring rule's default amount
-          if (txn.recurring_id && updates.amount !== undefined) {
-            await updateRecurring(db, txn.recurring_id, { amount: updates.amount });
-            emitDbEvent("recurring-changed");
-          }
+        const { rows } = await db.exec<{ status: string; recurring_id: string | null }>(
+          "SELECT status, recurring_id FROM transactions WHERE id = ?",
+          [id]
+        );
+        if (rows[0]?.status === "review") {
+          shouldAutoConfirm = true;
+          recurringId = rows[0].recurring_id;
         }
+      }
+
+      await updateTransaction(db, id, {
+        ...updates,
+        ...(shouldAutoConfirm ? { status: "confirmed" as const } : {}),
+      });
+
+      // Update the recurring rule's default amount
+      if (shouldAutoConfirm && recurringId && updates.amount !== undefined) {
+        await updateRecurring(db, recurringId, { amount: updates.amount });
+        emitDbEvent("recurring-changed");
       }
 
       emitDbEvent("transactions-changed");
     },
-    [db, transactions]
+    [db]
   );
 
   const removeTransaction = useCallback(

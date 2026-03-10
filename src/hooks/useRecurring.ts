@@ -5,7 +5,7 @@ import {
   createRecurring,
   updateRecurring,
   deleteRecurring,
-  processRecurringRules,
+  processRecurringRuleById,
 } from "../db/queries/recurring.ts";
 import { emitDbEvent, onDbEvent } from "../lib/db-events.ts";
 import { formatLocalDate } from "../lib/recurring.ts";
@@ -42,22 +42,18 @@ export function useRecurring() {
       is_variable?: boolean;
     }) => {
       const id = crypto.randomUUID();
-      const anchorDay = ["monthly", "quarterly", "yearly"].includes(rec.frequency)
-        ? parseInt(rec.start_date.slice(8, 10), 10)
-        : null;
       await createRecurring(db, {
         id,
         ...rec,
         next_occurrence: rec.start_date,
-        anchor_day: anchorDay,
         is_variable: rec.is_variable ? 1 : 0,
       });
       emitDbEvent("recurring-changed");
 
-      // If the rule starts in the past, run scheduler to catch up
+      // If the rule starts in the past or today, run scheduler to catch up
       const today = formatLocalDate(new Date());
       if (rec.start_date <= today) {
-        const count = await processRecurringRules(db, today);
+        const count = await processRecurringRuleById(db, id, today);
         if (count > 0) {
           emitDbEvent("transactions-changed");
         }

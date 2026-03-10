@@ -22,14 +22,8 @@ export function getNextOccurrence(
       return advanceMonths(d, 1, anchorDay);
     case "quarterly":
       return advanceMonths(d, 3, anchorDay);
-    case "yearly": {
-      const y = d.getFullYear() + 1;
-      const m = d.getMonth();
-      const anchor = anchorDay ?? d.getDate();
-      const maxDay = new Date(y, m + 1, 0).getDate();
-      const day = Math.min(anchor, maxDay);
-      return formatLocalDate(new Date(y, m, day));
-    }
+    case "yearly":
+      return advanceMonths(d, 12, anchorDay);
     case "custom":
       d.setDate(d.getDate() + (customDays ?? 1));
       break;

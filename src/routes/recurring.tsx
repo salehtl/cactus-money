@@ -37,6 +37,10 @@ const FREQ_SHORT: Record<string, string> = {
   custom: "C",
 };
 
+const GRID_COLS = "grid-cols-[1fr_100px_88px_96px_96px_100px_72px]";
+
+const TODAY = new Date().toISOString().split("T")[0]!;
+
 function RecurringPage() {
   const { items, loading, add, update, remove, stopRecurrence } = useRecurring();
   const { categories, add: addCategory } = useCategories();
@@ -56,13 +60,24 @@ function RecurringPage() {
     return id;
   }
 
+  const handleAdd = useCallback(async (data: FormData) => {
+    await add(data);
+    emitDbEvent("transactions-changed");
+    toast("Recurring rule created");
+  }, [add, toast]);
+
+  const handleUpdate = useCallback(async (id: string, data: FormData) => {
+    await update(id, data);
+    emitDbEvent("transactions-changed");
+    toast("Rule updated");
+  }, [update, toast]);
+
   async function handleToggleActive(item: RecurringTransaction) {
     if (item.is_active) {
       await stopRecurrence(item.id);
       toast("Recurring rule paused");
     } else {
       await update(item.id, { is_active: true });
-      emitDbEvent("recurring-changed");
       toast("Recurring rule resumed");
     }
   }
@@ -92,16 +107,8 @@ function RecurringPage() {
         onToggleActive={handleToggleActive}
         onDelete={(id) => setDeleteId(id)}
         onCreateCategory={handleCreateCategory}
-        onAdd={async (data) => {
-          await add(data);
-          emitDbEvent("transactions-changed");
-          toast("Recurring rule created");
-        }}
-        onUpdate={async (id, data) => {
-          await update(id, data);
-          emitDbEvent("transactions-changed");
-          toast("Rule updated");
-        }}
+        onAdd={handleAdd}
+        onUpdate={handleUpdate}
       />
 
       <RecurringGroup
@@ -114,16 +121,8 @@ function RecurringPage() {
         onToggleActive={handleToggleActive}
         onDelete={(id) => setDeleteId(id)}
         onCreateCategory={handleCreateCategory}
-        onAdd={async (data) => {
-          await add(data);
-          emitDbEvent("transactions-changed");
-          toast("Recurring rule created");
-        }}
-        onUpdate={async (id, data) => {
-          await update(id, data);
-          emitDbEvent("transactions-changed");
-          toast("Rule updated");
-        }}
+        onAdd={handleAdd}
+        onUpdate={handleUpdate}
       />
 
       {/* Inactive rules */}
@@ -140,7 +139,7 @@ function RecurringPage() {
 
           {showInactive && (
             <div className="bg-surface rounded-xl border border-border opacity-75">
-              <div className="grid grid-cols-[1fr_100px_88px_96px_96px_100px_72px] gap-2 px-4 py-2.5 border-b border-border bg-surface-alt rounded-t-xl text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+              <div className={`grid ${GRID_COLS} gap-2 px-4 py-2.5 border-b border-border bg-surface-alt rounded-t-xl text-[11px] font-semibold text-text-muted uppercase tracking-wider`}>
                 <div>Payee</div>
                 <div>Amount</div>
                 <div>Frequency</div>
@@ -250,7 +249,7 @@ function RecurringGroup({
 
       <div className="bg-surface rounded-xl border border-border">
         {/* Header row */}
-        <div className="grid grid-cols-[1fr_100px_88px_96px_96px_100px_72px] gap-2 px-4 py-2.5 border-b border-border bg-surface-alt rounded-t-xl text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+        <div className={`grid ${GRID_COLS} gap-2 px-4 py-2.5 border-b border-border bg-surface-alt rounded-t-xl text-[11px] font-semibold text-text-muted uppercase tracking-wider`}>
           <div>Payee</div>
           <div>Amount</div>
           <div>Frequency</div>
@@ -351,12 +350,11 @@ function RecurringRow({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
 
-  const today = new Date().toISOString().split("T")[0]!;
-  const isDue = item.is_active && item.next_occurrence <= today;
+  const isDue = item.is_active && item.next_occurrence <= TODAY;
 
   return (
     <div
-      className="grid grid-cols-[1fr_100px_88px_96px_96px_100px_72px] gap-2 px-4 py-2.5 border-b border-border last:border-b-0 hover:bg-surface-alt/50 transition-colors group items-center"
+      className={`grid ${GRID_COLS} gap-2 px-4 py-2.5 border-b border-border last:border-b-0 hover:bg-surface-alt/50 transition-colors group items-center`}
       onDoubleClick={onEdit}
     >
       {/* Payee */}

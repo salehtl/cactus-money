@@ -1,5 +1,15 @@
 export const SCHEMA_VERSION = 4;
 
+export const BACKUP_TABLES = [
+  "categories",
+  "transactions",
+  "recurring_transactions",
+  "tags",
+  "settings",
+] as const;
+
+export const ANCHOR_DAY_FREQUENCIES = ["monthly", "quarterly", "yearly"] as const;
+
 export const CREATE_TABLES = `
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,

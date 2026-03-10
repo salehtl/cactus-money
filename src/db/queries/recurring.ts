@@ -1,6 +1,7 @@
 import type { DbClient } from "../client.ts";
 import type { RecurringTransaction } from "../../types/database.ts";
 import { getNextOccurrence, formatLocalDate } from "../../lib/recurring.ts";
+import { createTransaction } from "./transactions.ts";
 
 export async function getRecurringTransactions(
   db: DbClient
@@ -30,6 +31,12 @@ export async function createRecurring(
     is_variable?: number;
   }
 ): Promise<void> {
+  // Auto-compute anchor_day for month-based frequencies if not explicitly provided
+  const anchorDay = rec.anchor_day ??
+    (["monthly", "quarterly", "yearly"].includes(rec.frequency)
+      ? parseInt(rec.start_date.slice(8, 10), 10)
+      : null);
+
   await db.exec(
     `INSERT INTO recurring_transactions
      (id, amount, type, category_id, payee, notes, frequency, custom_interval_days, start_date, end_date, next_occurrence, mode, anchor_day, is_variable)
@@ -47,7 +54,7 @@ export async function createRecurring(
       rec.end_date ?? null,
       rec.next_occurrence,
       rec.mode ?? "reminder",
-      rec.anchor_day ?? null,
+      anchorDay,
       rec.is_variable ?? 0,
     ]
   );
@@ -131,14 +138,6 @@ export async function getDueRecurring(
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function transactionExists(db: DbClient, recurringId: string, date: string): Promise<boolean> {
-  const { rows } = await db.exec<{ count: number }>(
-    "SELECT COUNT(*) as count FROM transactions WHERE recurring_id = ? AND date = ?",
-    [recurringId, date]
-  );
-  return (rows[0]?.count ?? 0) > 0;
-}
-
 /**
  * Given a recurring rule, compute the specific date it falls on
  * within [monthStart, monthEnd], or null if no occurrence.
@@ -152,16 +151,15 @@ function computeOccurrenceForMonth(
 
   // For month-based frequencies with anchor_day, direct calculation
   if ((freq === "monthly" || freq === "quarterly" || freq === "yearly") && rule.anchor_day) {
-    const [y, m] = monthStart.split("-").map(Number) as [number, number];
+    const [y, m] = monthStart.slice(0, 7).split("-").map(Number) as [number, number];
     const maxDay = new Date(y, m, 0).getDate();
     const day = Math.min(rule.anchor_day, maxDay);
-    const occ = `${monthStart.slice(0, 8)}${String(day).padStart(2, "0")}`;
+    const occ = formatLocalDate(new Date(y, m - 1, day));
 
     // For quarterly: check if this month is a valid quarter step from start
     if (freq === "quarterly") {
       const startMonth = parseInt(rule.start_date.slice(5, 7), 10);
-      const thisMonth = m;
-      if ((thisMonth - startMonth + 12) % 3 !== 0) return null;
+      if ((m - startMonth + 12) % 3 !== 0) return null;
     }
     // For yearly: check if this is the correct month
     if (freq === "yearly") {
@@ -188,10 +186,78 @@ function computeOccurrenceForMonth(
 // New scheduler functions
 // ---------------------------------------------------------------------------
 
+/** Process a single recurring rule: catch up missed occurrences and create planned future ones. */
+async function processRule(db: DbClient, rule: RecurringTransaction, today: string): Promise<number> {
+  const todayMonth = today.slice(0, 7);
+
+  // Prefetch all existing transaction dates for this rule to avoid N+1 queries
+  const { rows: existingRows } = await db.exec<{ date: string }>(
+    "SELECT date FROM transactions WHERE recurring_id = ? AND date >= ?",
+    [rule.id, rule.next_occurrence]
+  );
+  const existingDates = new Set(existingRows.map((r) => r.date));
+
+  let occ = rule.next_occurrence;
+  let deactivated = false;
+  let generated = 0;
+
+  // Catch up: generate for every missed occurrence up through today
+  while (occ <= today) {
+    if (rule.end_date && occ > rule.end_date) {
+      await updateRecurring(db, rule.id, { is_active: false });
+      deactivated = true;
+      break;
+    }
+
+    if (!existingDates.has(occ)) {
+      await createTransaction(db, {
+        id: crypto.randomUUID(),
+        amount: rule.amount,
+        type: rule.type,
+        category_id: rule.category_id,
+        date: occ,
+        payee: rule.payee,
+        notes: rule.notes,
+        recurring_id: rule.id,
+        status: rule.is_variable ? "review" : "confirmed",
+      });
+      generated++;
+    }
+
+    occ = getNextOccurrence(occ, rule.frequency, rule.anchor_day, rule.custom_interval_days);
+  }
+
+  // Update next_occurrence to the advanced value
+  if (!deactivated && occ !== rule.next_occurrence) {
+    if (rule.end_date && occ > rule.end_date) {
+      await updateRecurring(db, rule.id, { is_active: false });
+    } else {
+      await updateRecurring(db, rule.id, { next_occurrence: occ });
+    }
+  }
+
+  // Current month future: if next_occurrence is in the current month but after today
+  if (occ > today && occ.slice(0, 7) === todayMonth && !existingDates.has(occ)) {
+    await createTransaction(db, {
+      id: crypto.randomUUID(),
+      amount: rule.amount,
+      type: rule.type,
+      category_id: rule.category_id,
+      date: occ,
+      payee: rule.payee,
+      notes: rule.notes,
+      recurring_id: rule.id,
+      status: "planned",
+    });
+    generated++;
+  }
+
+  return generated;
+}
+
 /**
  * Runs once on app init. Catches up all missed recurring occurrences
- * from each rule's next_occurrence through today. Creates transactions
- * with appropriate status (confirmed, review, or planned).
+ * from each rule's next_occurrence through today.
  */
 export async function processRecurringRules(
   db: DbClient,
@@ -202,57 +268,24 @@ export async function processRecurringRules(
   );
 
   let generated = 0;
-  const todayMonth = today.slice(0, 7);
-
   for (const rule of rules) {
-    let occ = rule.next_occurrence;
-
-    // Catch up: generate for every missed occurrence up through today
-    while (occ <= today) {
-      if (rule.end_date && occ > rule.end_date) {
-        await updateRecurring(db, rule.id, { is_active: false });
-        break;
-      }
-
-      const exists = await transactionExists(db, rule.id, occ);
-      if (!exists) {
-        const status = rule.is_variable ? "review" : "confirmed";
-        await db.exec(
-          `INSERT INTO transactions (id, amount, type, category_id, date, payee, notes, recurring_id, status, group_name)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '')`,
-          [crypto.randomUUID(), rule.amount, rule.type, rule.category_id, occ, rule.payee, rule.notes, rule.id, status]
-        );
-        generated++;
-      }
-
-      const next = getNextOccurrence(occ, rule.frequency, rule.anchor_day, rule.custom_interval_days);
-      occ = next;
-    }
-
-    // Update next_occurrence to the advanced value
-    if (occ !== rule.next_occurrence) {
-      if (rule.end_date && occ > rule.end_date) {
-        await updateRecurring(db, rule.id, { is_active: false });
-      } else {
-        await updateRecurring(db, rule.id, { next_occurrence: occ });
-      }
-    }
-
-    // Current month future: if next_occurrence is in the current month but after today
-    if (occ > today && occ.slice(0, 7) === todayMonth) {
-      const exists = await transactionExists(db, rule.id, occ);
-      if (!exists) {
-        await db.exec(
-          `INSERT INTO transactions (id, amount, type, category_id, date, payee, notes, recurring_id, status, group_name)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'planned', '')`,
-          [crypto.randomUUID(), rule.amount, rule.type, rule.category_id, occ, rule.payee, rule.notes, rule.id]
-        );
-        generated++;
-      }
-    }
+    generated += await processRule(db, rule, today);
   }
-
   return generated;
+}
+
+/** Process a single recurring rule by ID (used after creating a new rule). */
+export async function processRecurringRuleById(
+  db: DbClient,
+  ruleId: string,
+  today: string
+): Promise<number> {
+  const { rows } = await db.exec<RecurringTransaction>(
+    "SELECT * FROM recurring_transactions WHERE id = ?",
+    [ruleId]
+  );
+  if (rows.length === 0) return 0;
+  return processRule(db, rows[0]!, today);
 }
 
 /**
@@ -272,23 +305,31 @@ export async function populateFutureMonth(
   const lastDay = new Date(y, m, 0).getDate();
   const monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
 
+  // Prefetch all recurring_ids that already have transactions this month
+  const { rows: existingRows } = await db.exec<{ recurring_id: string }>(
+    `SELECT DISTINCT recurring_id FROM transactions WHERE recurring_id IS NOT NULL AND substr(date, 1, 7) = ?`,
+    [month]
+  );
+  const existingRuleIds = new Set(existingRows.map((r) => r.recurring_id));
+
   for (const rule of rules) {
-    // Check if transaction already exists for this rule in this month
-    const { rows: existing } = await db.exec<{ count: number }>(
-      `SELECT COUNT(*) as count FROM transactions WHERE recurring_id = ? AND substr(date, 1, 7) = ?`,
-      [rule.id, month]
-    );
-    if ((existing[0]?.count ?? 0) > 0) continue;
+    if (existingRuleIds.has(rule.id)) continue;
 
     // Compute occurrence for this month
     const occ = computeOccurrenceForMonth(rule, monthStart, monthEnd);
     if (!occ) continue;
     if (rule.end_date && occ > rule.end_date) continue;
 
-    await db.exec(
-      `INSERT INTO transactions (id, amount, type, category_id, date, payee, notes, recurring_id, status, group_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'planned', '')`,
-      [crypto.randomUUID(), rule.amount, rule.type, rule.category_id, occ, rule.payee, rule.notes, rule.id]
-    );
+    await createTransaction(db, {
+      id: crypto.randomUUID(),
+      amount: rule.amount,
+      type: rule.type,
+      category_id: rule.category_id,
+      date: occ,
+      payee: rule.payee,
+      notes: rule.notes,
+      recurring_id: rule.id,
+      status: "planned",
+    });
   }
 }

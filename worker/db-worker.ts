@@ -2,7 +2,7 @@ import SQLiteESMFactory from "wa-sqlite/dist/wa-sqlite-async.mjs";
 import { Factory } from "wa-sqlite/src/sqlite-api.js";
 import { IDBBatchAtomicVFS } from "wa-sqlite/src/examples/IDBBatchAtomicVFS.js";
 import { OPFSCoopSyncVFS } from "wa-sqlite/src/examples/OPFSCoopSyncVFS.js";
-import { CREATE_TABLES, SCHEMA_VERSION, MIGRATIONS } from "../src/db/schema.ts";
+import { CREATE_TABLES, SCHEMA_VERSION, MIGRATIONS, BACKUP_TABLES } from "../src/db/schema.ts";
 import { getSeedSQL } from "../src/db/seed.ts";
 import type { DbWorkerRequest, DbWorkerResponse } from "../src/types/worker.ts";
 
@@ -60,10 +60,12 @@ async function migrate() {
   } else if (currentVersion < SCHEMA_VERSION) {
     // Pre-migration backup: stash current data in settings table
     try {
-      const tables = ["categories", "transactions", "recurring_transactions", "settings", "tags"];
       const backup: Record<string, unknown[]> = {};
-      for (const table of tables) {
-        const result = await exec(`SELECT * FROM ${table}`);
+      for (const table of BACKUP_TABLES) {
+        const sql = table === "settings"
+          ? `SELECT * FROM ${table} WHERE key != '_pre_migration_backup'`
+          : `SELECT * FROM ${table}`;
+        const result = await exec(sql);
         backup[table] = result.rows;
       }
       const json = JSON.stringify({ version: currentVersion, backup_at: new Date().toISOString(), ...backup });
