@@ -74,9 +74,12 @@ function deduplicate(transactions: ParsedTransaction[]): ParsedTransaction[] {
 }
 
 
+const todayStr = new Date().toISOString().slice(0, 10);
+
 function rawToTransaction(item: any): ParsedTransaction {
+  const date = String(item.date ?? "");
   return {
-    date: String(item.date ?? ""),
+    date: date > todayStr ? "" : date,
     payee: String(item.payee ?? ""),
     amount: Math.abs(Number(item.amount) || 0),
     type: item.type === "income" ? "income" : "expense",
