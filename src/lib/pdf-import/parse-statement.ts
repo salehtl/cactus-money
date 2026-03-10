@@ -20,6 +20,10 @@ export interface ParseProgress {
   totalBatches?: number;
 }
 
+export interface ParseOptions {
+  maxConcurrent?: number;
+}
+
 function buildSystemPrompt(categories: Category[]): string {
   const expense = categories
     .filter((c) => !c.is_income && !c.parent_id)
@@ -80,6 +84,7 @@ export async function parseStatement(
   config: LLMConfig,
   onProgress?: (progress: ParseProgress) => void,
   onTransaction?: (txn: ParsedTransaction) => void,
+  options?: ParseOptions,
 ): Promise<ParsedTransaction[]> {
   // Step 1: Render PDF to images
   onProgress?.({ message: "Loading PDF...", phase: "rendering", fileName: file.name });
@@ -195,12 +200,50 @@ export async function parseStatement(
     return batchTxns;
   }
 
-  // Run batches with max concurrency
+  const maxConcurrent = options?.maxConcurrent ?? MAX_CONCURRENT;
+
+  // Run batches with max concurrency, with rate-limit retry at reduced concurrency
   const results: ParsedTransaction[][] = [];
-  for (let i = 0; i < batches.length; i += MAX_CONCURRENT) {
-    const chunk = batches.slice(i, i + MAX_CONCURRENT);
-    const chunkResults = await Promise.all(chunk.map(processBatch));
-    results.push(...chunkResults);
+  let concurrency = maxConcurrent;
+
+  for (let i = 0; i < batches.length; i += concurrency) {
+    const chunk = batches.slice(i, i + concurrency);
+    try {
+      const chunkResults = await Promise.all(chunk.map(processBatch));
+      results.push(...chunkResults);
+    } catch (e) {
+      // If rate limited and we haven't already reduced concurrency, retry this chunk sequentially
+      if (
+        e instanceof ImportError &&
+        (e.code === "rate_limited" || e.code === "api_error") &&
+        concurrency > 1
+      ) {
+        concurrency = 1;
+        // Retry failed chunk one batch at a time
+        for (const batch of chunk) {
+          try {
+            const result = await processBatch(batch);
+            results.push(result);
+          } catch (retryErr) {
+            if (
+              retryErr instanceof ImportError &&
+              (retryErr.code === "rate_limited" || retryErr.code === "api_error")
+            ) {
+              // Still rate limited even at concurrency 1 — signal fallback
+              throw new ImportError(
+                "rate_limited_with_fallback",
+                "Rate Limited",
+                retryErr.message,
+                retryErr.suggestion,
+              );
+            }
+            throw retryErr;
+          }
+        }
+      } else {
+        throw e;
+      }
+    }
   }
 
   for (const batch of results) {
