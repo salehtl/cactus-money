@@ -59,7 +59,7 @@ export const anthropicProvider: LLMProvider = {
     }
 
     if (!response.ok) {
-      throw classifyHttpError(response.status, "Anthropic", ERROR_MAPPINGS);
+      throw await classifyHttpError(response.status, "Anthropic", ERROR_MAPPINGS, response);
     }
 
     return readSSEStream(response, (data) => {

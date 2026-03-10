@@ -65,6 +65,10 @@ function llmProxyPlugin(): PluginOption {
 
         // Collect request body
         const chunks: Buffer[] = [];
+        const ac = new AbortController();
+        const proxyTimeout = setTimeout(() => ac.abort(), 120_000); // proxy-side 2min ceiling
+        req.on("error", () => ac.abort());
+        req.on("close", () => ac.abort());
         req.on("data", (chunk: Buffer) => chunks.push(chunk));
         req.on("end", async () => {
           try {
@@ -83,6 +87,7 @@ function llmProxyPlugin(): PluginOption {
               method: req.method || "POST",
               headers,
               body,
+              signal: ac.signal,
             });
 
             // Stream the response back (pipe Node readable stream)
@@ -92,11 +97,17 @@ function llmProxyPlugin(): PluginOption {
             if (upstream.body) {
               // Convert Web ReadableStream to Node Readable and pipe
               const nodeStream = Readable.fromWeb(upstream.body as import("stream/web").ReadableStream);
+              nodeStream.on("error", () => res.destroy());
+              res.on("close", () => { clearTimeout(proxyTimeout); nodeStream.destroy(); });
               nodeStream.pipe(res);
             } else {
+              clearTimeout(proxyTimeout);
               res.end();
             }
-          } catch {
+          } catch (e) {
+            clearTimeout(proxyTimeout);
+            if ((e as Error).name === "AbortError") return; // client disconnected — nothing to write to
+            if (res.headersSent) return; // headers already sent, can't write error response
             res.writeHead(502, { "Content-Type": "application/json", ...corsHeaders });
             res.end(JSON.stringify({ error: { type: "proxy_error", message: "Failed to connect to upstream API." } }));
           }

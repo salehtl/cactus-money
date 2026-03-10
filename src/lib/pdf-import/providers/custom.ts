@@ -72,7 +72,7 @@ export const customProvider: LLMProvider = {
     }
 
     if (!response.ok) {
-      throw classifyHttpError(response.status, "custom endpoint", ERROR_MAPPINGS);
+      throw await classifyHttpError(response.status, "custom endpoint", ERROR_MAPPINGS, response);
     }
 
     return readSSEStream(response, openaiExtractText, onText);

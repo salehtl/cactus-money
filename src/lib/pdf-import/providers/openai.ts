@@ -12,8 +12,8 @@ export const OPENAI_DEFAULT_MODEL = "gpt-4.1-mini";
 
 const ERROR_MAPPINGS = [
   { status: 401, code: "invalid_api_key" as const, title: "Invalid API Key", message: "The API key was rejected by OpenAI.", suggestion: "Check that your key is correct in Settings. Keys start with sk-." },
-  { status: 429, code: "rate_limited" as const, title: "Rate Limited", message: "Too many requests to the OpenAI API.", suggestion: "Wait a minute, then try again." },
-  { status: 403, code: "credits_exhausted" as const, title: "No API Credits", message: "Your OpenAI account has insufficient credits or permissions.", suggestion: "Add credits at platform.openai.com, then try again." },
+  { status: 429, code: "rate_limited" as const, title: "Rate Limited", message: "Too many requests or quota exceeded.", suggestion: "Wait a minute and try again. If this persists, check your usage limits at platform.openai.com." },
+  { status: 403, code: "api_error" as const, title: "Access Denied", message: "OpenAI rejected the request.", suggestion: "This can mean insufficient quota, org-level restrictions, or missing model access. Check platform.openai.com for details." },
 ];
 
 export const openaiProvider: LLMProvider = {
@@ -57,7 +57,7 @@ export const openaiProvider: LLMProvider = {
     }
 
     if (!response.ok) {
-      throw classifyHttpError(response.status, "OpenAI", ERROR_MAPPINGS);
+      throw await classifyHttpError(response.status, "OpenAI", ERROR_MAPPINGS, response);
     }
 
     return readSSEStream(response, openaiExtractText, onText);

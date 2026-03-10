@@ -10,8 +10,8 @@ export const GEMINI_MODELS: ModelOption[] = [
 export const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash";
 
 const ERROR_MAPPINGS = [
-  { status: 400, code: "invalid_api_key" as const, title: "Invalid API Key", message: "The API key was rejected by Google.", suggestion: "Check that your key is correct in Settings." },
-  { status: 403, code: "invalid_api_key" as const, title: "Invalid API Key", message: "The API key does not have access to this model.", suggestion: "Check your API key permissions in Google AI Studio." },
+  { status: 400, code: "api_error" as const, title: "Bad Request", message: "The Gemini API rejected the request.", suggestion: "This can mean an invalid API key, unsupported model, or malformed request. Check your settings." },
+  { status: 403, code: "api_error" as const, title: "Access Denied", message: "The Gemini API denied access.", suggestion: "Ensure the Generative Language API is enabled in your Google Cloud project and the key has access." },
   { status: 429, code: "rate_limited" as const, title: "Rate Limited", message: "Too many requests to the Gemini API.", suggestion: "Wait a minute, then try again." },
 ];
 
@@ -56,7 +56,7 @@ export const geminiProvider: LLMProvider = {
     }
 
     if (!response.ok) {
-      throw classifyHttpError(response.status, "Gemini", ERROR_MAPPINGS);
+      throw await classifyHttpError(response.status, "Gemini", ERROR_MAPPINGS, response);
     }
 
     return readSSEStream(response, (data) => {

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.3.1] - 2026-03-10
+
+### Fixed
+- PDF import: LLM API errors now surface the actual upstream error message instead of generic fallback text
+- PDF import: Gemini 400/403 errors no longer incorrectly shown as "Invalid API Key"
+- PDF import: OpenAI 403 errors no longer incorrectly shown as "No API Credits" (can be quota, org restrictions, or model access)
+- PDF import: plain-text error bodies from APIs are now shown to users (previously only JSON bodies were parsed)
+- Vite dev proxy: cancelling a PDF import mid-stream no longer crashes the dev server
+- Vite dev proxy: upstream fetch is now aborted immediately when the browser disconnects, preventing hung connections
+- Vite dev proxy: added 120s server-side timeout to prevent indefinitely stalled upstream connections
+
 ## [2.3.0] - 2026-03-10
 
 ### Changed

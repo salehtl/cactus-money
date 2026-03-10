@@ -11,20 +11,42 @@ interface ErrorMapping {
 /**
  * Classify an HTTP error status into an ImportError using provider-specific mappings.
  * Falls back to a generic API error if no mapping matches.
+ * Optionally reads response body for more specific error details.
  */
-export function classifyHttpError(
+export async function classifyHttpError(
   status: number,
   providerName: string,
   mappings: ErrorMapping[],
-): ImportError {
+  response?: Response,
+): Promise<ImportError> {
+  // Try to extract the actual error message from the response body
+  let upstreamMessage = "";
+  if (response) {
+    try {
+      const text = await response.text();
+      try {
+        const body = JSON.parse(text);
+        upstreamMessage = body?.error?.message ?? "";
+      } catch {
+        // Not JSON — use raw text if short enough to surface to users
+        upstreamMessage = text.length < 300 ? text.trim() : "";
+      }
+    } catch { /* body unreadable */ }
+  }
+
   const match = mappings.find((m) => m.status === status);
   if (match) {
-    return new ImportError(match.code, match.title, match.message, match.suggestion);
+    return new ImportError(
+      match.code,
+      match.title,
+      upstreamMessage || match.message,
+      match.suggestion,
+    );
   }
   return new ImportError(
     "api_error",
     "API Error",
-    `Something went wrong while contacting the ${providerName} API.`,
+    upstreamMessage || `Something went wrong while contacting the ${providerName} API.`,
     "If this persists, check your settings.",
   );
 }
