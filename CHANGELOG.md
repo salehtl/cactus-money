@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] - 2026-03-10
+
+### Added
+- Variable-amount recurring transactions with "review" status and cashflow banner notification
+- Recurring page redesigned with separate Income/Expense groups and summary bar
+- Anchor-day support for monthly/quarterly/yearly recurring (always lands on same day-of-month)
+- Auto-generation of recurring transactions on app startup (catches up missed months)
+- Pre-migration auto-backup stored in settings before schema upgrades
+- Export/import compatibility for v2 backups (auto-derives anchor_day)
+
+### Fixed
+- Date drift bug: monthly recurring losing one day per iteration in UTC+ timezones
+- Past recurring transactions now auto-set to "confirmed" instead of always "planned"
+- Inline category creation from income recurring rules now correctly marks category as income
+
+### Changed
+- Schema version 3 → 4 (added anchor_day, is_variable columns to recurring_transactions)
+- Export format version 2 → 3
+- StatusPill extracted to shared component with three variants (planned/confirmed/review)
+- Recurring scheduler unified into single processRecurringRules function (replaces processDue + autoPopulateFutureTransactions)
+
+### Removed
+- Dead `processDue()` code from useRecurring hook
+
 ## [2.1.2] - 2026-03-10
 
 ### Fixed
