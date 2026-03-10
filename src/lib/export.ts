@@ -101,6 +101,23 @@ function csvEscape(value: string): string {
   return value;
 }
 
+export function normalizeImportData(data: any): any {
+  if (data.version < 3) {
+    // Backfill anchor_day for old recurring rules
+    if (data.recurring_transactions) {
+      for (const rule of data.recurring_transactions) {
+        if (!rule.anchor_day && ["monthly", "quarterly", "yearly"].includes(rule.frequency)) {
+          rule.anchor_day = parseInt(rule.start_date?.slice(8, 10) ?? "1", 10);
+        }
+        if (rule.is_variable === undefined) {
+          rule.is_variable = 0;
+        }
+      }
+    }
+  }
+  return data;
+}
+
 export function downloadFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
