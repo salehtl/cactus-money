@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-03-10
+
 ### Added
 - Uncategorized filter toggle in PDF import review modal
 - Portal-rendered category dropdown in review table (escapes overflow clipping)
