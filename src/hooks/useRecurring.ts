@@ -13,6 +13,7 @@ import {
 } from "../db/queries/transactions.ts";
 import { emitDbEvent, onDbEvent } from "../lib/db-events.ts";
 import { getToday } from "../lib/format.ts";
+import { getNextOccurrence } from "../lib/recurring.ts";
 import type { RecurringTransaction } from "../types/database.ts";
 
 export function useRecurring() {
@@ -143,7 +144,16 @@ export function useRecurring() {
       const updates: Parameters<typeof updateRecurring>[2] = { is_active: true };
       if (rule?.end_date && rule.end_date < today) {
         updates.end_date = null;
-        updates.next_occurrence = today;
+        // Compute the first valid future occurrence respecting the rule's cadence
+        let occ = today;
+        if (rule.frequency) {
+          occ = getNextOccurrence(today, rule.frequency, rule.anchor_day, rule.custom_interval_days);
+          // If today itself is a valid occurrence date (matches anchor), use today
+          if (rule.anchor_day && parseInt(today.slice(8, 10), 10) === rule.anchor_day) {
+            occ = today;
+          }
+        }
+        updates.next_occurrence = occ;
       }
       await updateRecurring(db, recurringId, updates);
       const count = await processRecurringRuleById(db, recurringId, today);

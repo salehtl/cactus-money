@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.5.0] - 2026-03-13
+
+### Added
+- **Multi-occurrence recurring**: Weekly/daily/biweekly rules now generate all occurrences within a month (e.g. a weekly rule produces 4–5 transactions), not just one
+- **Timezone-aware scheduling**: Replaced UTC-based date logic with `Intl.DateTimeFormat` timezone support (default: Asia/Dubai), configurable in Settings
+- **Monthly projection summary**: Recurring page summary now shows projected monthly totals using `monthlyEquivalent()` conversion
+
+### Changed
+- **Inactive section redesign**: Split into separate Income/Expense sections with "Ended" (gray, strikethrough) and "Paused" (orange) status badges
+
+### Fixed
+- **Transactions showing wrong dates between midnight–4AM**: Timezone-aware `getToday()` fixes date boundary issues in UAE timezone
+- **Resuming ended recurring rule respects cadence**: Resuming a rule now computes the next valid occurrence from the rule's frequency and anchor day, instead of naively using today's date
+
 ## [2.4.1] - 2026-03-11
 
 ### Fixed
