@@ -7,6 +7,7 @@ interface ActionsCellProps {
   onDelete: () => void;
   onDuplicate?: () => void;
   onStopRecurrence?: () => void;
+  onSwitchType?: () => void;
 }
 
 export function ActionsCell({
@@ -14,6 +15,7 @@ export function ActionsCell({
   onDelete,
   onDuplicate,
   onStopRecurrence,
+  onSwitchType,
 }: ActionsCellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -42,6 +44,14 @@ export function ActionsCell({
               className="w-full text-left px-3 py-2 sm:py-1.5 text-xs text-text-muted hover:bg-surface-alt hover:text-text transition-colors cursor-pointer"
             >
               Duplicate
+            </button>
+          )}
+          {onSwitchType && (
+            <button
+              onClick={() => { onSwitchType(); setMenuOpen(false); }}
+              className="w-full text-left px-3 py-2 sm:py-1.5 text-xs text-text-muted hover:bg-surface-alt hover:text-text transition-colors cursor-pointer"
+            >
+              Move to {row.type === "income" ? "expenses" : "income"}
             </button>
           )}
           {row.isRecurring && row.recurringId && onStopRecurrence && (

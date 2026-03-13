@@ -124,6 +124,7 @@ function CashflowPage() {
 
   return (
     <div
+      className="min-h-full"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -179,38 +180,34 @@ function CashflowPage() {
             toast("Recurrence stopped");
           }}
           onEditRow={async (id, updates) => {
+            // Type switch: always applies to just this transaction, clears category
+            if ("type" in updates) {
+              await editTransaction(id, updates);
+              toast("Moved to " + (updates.type === "income" ? "income" : "expenses"));
+              return;
+            }
             // Scope-sensitive fields on recurring instances show a modal
             const scopeFields = ["payee", "amount", "date"] as const;
             const scopeField = scopeFields.find((f) => f in updates);
             if (scopeField) {
-              const { rows } = await db.exec<{ recurring_id: string | null; [k: string]: unknown }>(
-                "SELECT recurring_id, payee, amount, date FROM transactions WHERE id = ?",
-                [id]
-              );
-              const row = rows[0];
-              if (row?.recurring_id) {
-                const recurringId = row.recurring_id;
-                const rawValue = updates[scopeField as keyof typeof updates];
+              const txn = txnById.get(id);
+              if (txn?.recurring_id) {
                 const formatVal = (f: string, v: unknown) =>
                   f === "amount" ? formatCurrency(v as number) : String(v);
                 setPendingRecurringEdit({
                   txnId: id,
-                  recurringId,
+                  recurringId: txn.recurring_id,
                   field: scopeField,
-                  oldValue: formatVal(scopeField, row[scopeField]),
-                  newValue: formatVal(scopeField, rawValue),
-                  rawValue,
+                  oldValue: formatVal(scopeField, txn[scopeField as keyof typeof txn]),
+                  newValue: formatVal(scopeField, updates[scopeField as keyof typeof updates]),
+                  rawValue: updates[scopeField as keyof typeof updates],
                 });
                 return;
               }
             }
             // category_id edits on recurring instances silently update the rule + all future planned instances
             if ("category_id" in updates) {
-              const { rows: catRows } = await db.exec<{ recurring_id: string | null }>(
-                "SELECT recurring_id FROM transactions WHERE id = ?",
-                [id]
-              );
-              const recurringId = catRows[0]?.recurring_id;
+              const recurringId = txnById.get(id)?.recurring_id;
               if (recurringId) {
                 await editRecurringInstance(id, recurringId, "category_id", updates.category_id, "all");
                 toast("Updated");

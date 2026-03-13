@@ -68,11 +68,11 @@ export function diceCoefficient(a: string, b: string): number {
 type Frequency = RecurringCandidate["inferredFrequency"];
 
 const FREQUENCY_RANGES: [number, number, Frequency][] = [
-  [6, 8, "weekly"],
-  [13, 16, "biweekly"],
-  [27, 33, "monthly"],
-  [85, 100, "quarterly"],
-  [350, 380, "yearly"],
+  [5, 9, "weekly"],
+  [12, 17, "biweekly"],
+  [26, 35, "monthly"],
+  [55, 105, "quarterly"],
+  [340, 395, "yearly"],
 ];
 
 function medianIntervalToFrequency(medianDays: number): Frequency | null {
@@ -88,6 +88,22 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0
     ? (sorted[mid - 1]! + sorted[mid]!) / 2
     : sorted[mid]!;
+}
+
+/** Known subscription/recurring service keywords (lowercase) */
+const SUBSCRIPTION_KEYWORDS = [
+  "netflix", "spotify", "apple", "icloud", "google", "youtube", "amazon",
+  "prime", "hulu", "disney", "hbo", "paramount", "peacock", "crunchyroll",
+  "adobe", "microsoft", "office365", "dropbox", "github", "notion",
+  "slack", "zoom", "canva", "figma", "chatgpt", "openai", "claude",
+  "anthropic", "linkedin", "duolingo", "headspace", "calm",
+  "membership", "subscription", "monthly", "annual", "renewal",
+  "insurance", "salik", "nol", "etisalat", "du ", "telecom",
+];
+
+/** Accepts a pre-normalized payee (via normalizePayee) for consistent matching */
+function isSubscriptionLike(normalizedPayee: string): boolean {
+  return SUBSCRIPTION_KEYWORDS.some((kw) => normalizedPayee.includes(kw));
 }
 
 function mostCommonDayOfMonth(dates: string[]): number {
@@ -110,10 +126,11 @@ function mostCommonDayOfMonth(dates: string[]): number {
 export function detectRecurringPatterns(txns: TxnLike[]): RecurringCandidate[] {
   // 1. Filter to selected, non-duplicate transactions
   const eligible = txns.filter((t) => t.selected && !t.duplicate);
-  if (eligible.length < 2) return [];
+  if (eligible.length < 1) return [];
 
   // 2. Group by type, then by normalized payee (fuzzy)
-  const groups: Map<string, TxnLike[]> = new Map();
+  // Map key → [norm, txns] so we don't re-compute norm during group processing
+  const groups: Map<string, [string, TxnLike[]]> = new Map();
 
   for (const t of eligible) {
     const norm = normalizePayee(t.payee);
@@ -121,9 +138,8 @@ export function detectRecurringPatterns(txns: TxnLike[]): RecurringCandidate[] {
 
     // Try to find an existing group with Dice >= 0.8
     let matched = false;
-    for (const [gKey, gTxns] of groups) {
+    for (const [gKey, [gNorm, gTxns]] of groups) {
       if (!gKey.startsWith(t.type + "::")) continue;
-      const gNorm = gKey.slice(t.type.length + 2);
       if (diceCoefficient(norm, gNorm) >= 0.8) {
         gTxns.push(t);
         matched = true;
@@ -131,18 +147,42 @@ export function detectRecurringPatterns(txns: TxnLike[]): RecurringCandidate[] {
       }
     }
     if (!matched) {
-      groups.set(key, [t]);
+      groups.set(key, [norm, [t]]);
     }
   }
 
   // 3. Process each group
   const candidates: RecurringCandidate[] = [];
 
-  for (const [, txnGroup] of groups) {
-    if (txnGroup.length < 2) continue;
-
-    // Sort by date
+  for (const [, [groupNorm, txnGroup]] of groups) {
     const sorted = [...txnGroup].sort((a, b) => a.date.localeCompare(b.date));
+
+    // Single-occurrence: detect subscriptions by payee keyword
+    if (sorted.length === 1) {
+      const t = sorted[0]!;
+      if (isSubscriptionLike(groupNorm)) {
+        const anchorDay = parseInt(t.date.slice(8, 10), 10);
+        const nextOccurrence = getNextOccurrence(t.date, "monthly", anchorDay);
+        candidates.push({
+          id: crypto.randomUUID(),
+          payee: t.payee,
+          normalizedPayee: groupNorm,
+          type: t.type,
+          category_id: t.category_id,
+          category: t.category,
+          occurrences: [{ date: t.date, amount: t.amount }],
+          inferredFrequency: "monthly",
+          averageAmount: t.amount,
+          isVariable: false,
+          confidence: "medium",
+          startDate: t.date,
+          nextOccurrence,
+          anchorDay,
+          selected: false, // medium confidence → not pre-selected
+        });
+      }
+      continue;
+    }
 
     // Compute consecutive intervals in days
     const intervals: number[] = [];
@@ -154,13 +194,27 @@ export function detectRecurringPatterns(txns: TxnLike[]): RecurringCandidate[] {
 
     if (intervals.length === 0) continue;
 
-    // Map median interval to frequency
     const medianInterval = median(intervals);
-    const freq = medianIntervalToFrequency(medianInterval);
+    let freq = medianIntervalToFrequency(medianInterval);
     if (!freq) continue;
 
-    // Confidence
-    const confidence: "high" | "medium" = sorted.length >= 3 ? "high" : "medium";
+    // Weekly/biweekly need 3+ occurrences to be confident — with only 2
+    // data points they're easily confused with monthly. Promote to monthly
+    // if the payee looks like a subscription, otherwise skip.
+    if ((freq === "weekly" || freq === "biweekly") && sorted.length < 3) {
+      if (isSubscriptionLike(groupNorm)) {
+        freq = "monthly";
+      } else {
+        continue;
+      }
+    }
+
+    // Confidence: monthly/quarterly/yearly are high with 2+ occurrences;
+    // weekly/biweekly require 3+.
+    const isHighFreq = freq === "weekly" || freq === "biweekly";
+    const confidence: "high" | "medium" =
+      isHighFreq ? (sorted.length >= 3 ? "high" : "medium") :
+      sorted.length >= 2 ? "high" : "medium";
 
     // Variable amount check
     const amounts = sorted.map((t) => t.amount);
@@ -175,20 +229,17 @@ export function detectRecurringPatterns(txns: TxnLike[]): RecurringCandidate[] {
       ? mostCommonDayOfMonth(dates)
       : null;
 
-    // Start date and next occurrence
     const startDate = sorted[0]!.date;
     const lastDate = sorted[sorted.length - 1]!.date;
     const nextOccurrence = getNextOccurrence(lastDate, freq, anchorDay);
 
-    // Use earliest occurrence's payee as representative
     const representativePayee = sorted[0]!.payee;
-    // Use category from any transaction that has one
     const withCat = sorted.find((t) => t.category_id);
 
     candidates.push({
       id: crypto.randomUUID(),
       payee: representativePayee,
-      normalizedPayee: normalizePayee(representativePayee),
+      normalizedPayee: groupNorm,
       type: sorted[0]!.type,
       category_id: withCat?.category_id ?? null,
       category: withCat?.category ?? null,
@@ -204,9 +255,13 @@ export function detectRecurringPatterns(txns: TxnLike[]): RecurringCandidate[] {
     });
   }
 
-  // Sort: high confidence first, then by payee
+  // Sort: high confidence first, then monthly before weekly/biweekly, then by payee
   candidates.sort((a, b) => {
     if (a.confidence !== b.confidence) return a.confidence === "high" ? -1 : 1;
+    const freqPriority = (f: Frequency) =>
+      f === "monthly" ? 0 : f === "quarterly" ? 1 : f === "yearly" ? 2 : 3;
+    const fp = freqPriority(a.inferredFrequency) - freqPriority(b.inferredFrequency);
+    if (fp !== 0) return fp;
     return a.payee.localeCompare(b.payee);
   });
 

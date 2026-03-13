@@ -197,6 +197,10 @@ export const TransactionRow = memo(function TransactionRow({
               ? () => onStopRecurrence(row.recurringId!)
               : undefined
           }
+          onSwitchType={() => {
+            const newType = row.type === "income" ? "expense" : "income";
+            onEditRow(row.id, { type: newType, category_id: null });
+          }}
         />
       </div>
     </div>

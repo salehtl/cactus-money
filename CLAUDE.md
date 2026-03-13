@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Personal finance PWA (YNAB-like). Local-first, no server dependency. Currency: AED (UAE Dirham). Light theme only.
+Personal finance PWA (YNAB-like), named "cactus-money". Local-first, no server dependency. Currency: AED (UAE Dirham). Light theme only. Deployed to Cloudflare Pages.
 
 ## Changelog
 
@@ -35,7 +35,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/) (`Added`, `Changed`, `Fi
 - `bun run preview` — Preview production build
 - `bun run test` — Run tests (Vitest)
 - `bun run test:watch` — Run tests in watch mode
+- `bun run test:coverage` — Run tests with coverage
 - `bunx vitest run src/path/to/file.test.ts` — Run a single test file
+- `bun run deploy` — Build and deploy to Cloudflare Pages (`wrangler pages deploy dist`)
+- `bun run preview:prod` — Build and preview with Cloudflare Pages dev server
 
 ## Testing
 
