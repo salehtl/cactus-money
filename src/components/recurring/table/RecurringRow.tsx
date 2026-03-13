@@ -28,6 +28,13 @@ interface RecurringRowProps {
   inactive?: boolean;
 }
 
+/** Determine why a rule is inactive */
+function getInactiveReason(item: RecurringTransaction): "paused" | "ended" | null {
+  if (item.is_active) return null;
+  if (item.end_date && item.end_date < getToday()) return "ended";
+  return "paused";
+}
+
 export const RecurringRow = memo(function RecurringRow({
   item,
   isFocused,
@@ -46,6 +53,7 @@ export const RecurringRow = memo(function RecurringRow({
   const isIncome = item.type === "income";
   const cat = categories.find((c) => c.id === item.category_id);
   const isDue = item.is_active && item.next_occurrence <= getToday();
+  const inactiveReason = inactive ? getInactiveReason(item) : null;
 
   function handleRowClick(e: React.MouseEvent) {
     if (inactive) return;
@@ -86,7 +94,7 @@ export const RecurringRow = memo(function RecurringRow({
     <div className={`group border-b border-border/60 last:border-b-0 ${focusBorder} ${selectedBg}`}>
       <div
         onClick={handleRowClick}
-        className={`grid ${RECURRING_GRID_COLS} gap-x-3 items-center px-3 py-1.5 sm:py-0 sm:h-9 hover:bg-surface-alt/50 transition-colors cursor-default`}
+        className={`grid ${RECURRING_GRID_COLS} gap-x-3 items-center px-3 py-1.5 sm:py-0 sm:h-9 hover:bg-surface-alt/50 transition-colors cursor-default ${inactive ? "opacity-60" : ""}`}
       >
         {/* Checkbox */}
         <div className="flex items-center justify-center" onClick={(e) => {
@@ -98,7 +106,7 @@ export const RecurringRow = memo(function RecurringRow({
             dispatch({ type: "TOGGLE_SELECT", rowId: item.id });
           }
         }}>
-          {!inactive && (
+          {!inactive ? (
             <input
               type="checkbox"
               checked={isSelected}
@@ -107,6 +115,8 @@ export const RecurringRow = memo(function RecurringRow({
               data-checked={isSelected || undefined}
               style={isSelected ? { opacity: 1 } : undefined}
             />
+          ) : (
+            <span className={`inline-block w-1.5 h-1.5 rounded-full ${inactiveReason === "ended" ? "bg-text-light/40" : "bg-warning/60"}`} title={inactiveReason === "ended" ? "Ended" : "Paused"} />
           )}
         </div>
 
@@ -116,6 +126,9 @@ export const RecurringRow = memo(function RecurringRow({
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: cat?.color ?? "var(--color-border-dark)" }} />
               <span className="text-[13px] truncate text-text-muted">{item.payee || "Untitled"}</span>
+              <span className={`text-[9px] font-semibold uppercase tracking-wider px-1 py-px rounded ${inactiveReason === "ended" ? "bg-border/50 text-text-light" : "bg-warning/15 text-warning"}`}>
+                {inactiveReason === "ended" ? "Ended" : "Paused"}
+              </span>
             </div>
           ) : (
             <PayeeCell
@@ -234,7 +247,7 @@ export const RecurringRow = memo(function RecurringRow({
           />
         )}
 
-        {/* Actions */}
+        {/* Actions — always available, even for inactive rows */}
         <RecurringActionsCell
           isActive={!!item.is_active}
           onToggleActive={() => onToggleActive(item.id)}

@@ -17,6 +17,7 @@ import {
   autoExport,
 } from "../lib/fs-sync.ts";
 import { getSetting, setSetting } from "../db/queries/settings.ts";
+import { DEFAULT_TIMEZONE, setAppTimezone } from "../lib/format.ts";
 import { getSeedSQL } from "../db/seed.ts";
 import type { ProviderId } from "../lib/pdf-import/llm-provider.ts";
 import {
@@ -193,6 +194,9 @@ function SettingsPage() {
 
       {/* Appearance */}
       <AppearanceSection />
+
+      {/* Timezone */}
+      <TimezoneSection />
 
       {/* AI Integration section */}
       <AIIntegrationSection />
@@ -410,6 +414,74 @@ function AppearanceSection() {
           <option value="light">Light</option>
           <option value="dark">Dark</option>
           <option value="system">System</option>
+        </select>
+      </div>
+    </section>
+  );
+}
+
+// --- Timezone section ---
+
+const COMMON_TIMEZONES = [
+  "Asia/Dubai",
+  "Asia/Riyadh",
+  "Asia/Kuwait",
+  "Asia/Muscat",
+  "Asia/Bahrain",
+  "Asia/Qatar",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Pacific/Auckland",
+] as const;
+
+function TimezoneSection() {
+  const db = useDb();
+  const { toast } = useToast();
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    getSetting(db, "timezone").then((tz) => {
+      if (tz) setTimezone(tz);
+      setLoaded(true);
+    });
+  }, [db]);
+
+  if (!loaded) return null;
+
+  async function handleChange(newTz: string) {
+    setTimezone(newTz);
+    setAppTimezone(newTz);
+    await setSetting(db, "timezone", newTz);
+    emitDbEvent("settings-changed");
+    toast("Timezone updated");
+  }
+
+  return (
+    <section className="bg-surface rounded-xl border border-border p-4 mb-4">
+      <h2 className="text-sm font-bold mb-3">Timezone</h2>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">Local Timezone</p>
+          <p className="text-xs text-text-muted">Used for recurring transaction scheduling</p>
+        </div>
+        <select
+          value={timezone}
+          onChange={(e) => handleChange(e.target.value)}
+          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent cursor-pointer"
+        >
+          {COMMON_TIMEZONES.map((tz) => (
+            <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
+          ))}
         </select>
       </div>
     </section>

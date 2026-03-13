@@ -138,12 +138,19 @@ export function useRecurring() {
   const resumeRecurrence = useCallback(
     async (recurringId: string) => {
       const today = getToday();
-      await updateRecurring(db, recurringId, { is_active: true });
+      // Check if rule ended (end_date in the past) — if so, clear end_date and reset next_occurrence
+      const rule = items.find((r) => r.id === recurringId);
+      const updates: Parameters<typeof updateRecurring>[2] = { is_active: true };
+      if (rule?.end_date && rule.end_date < today) {
+        updates.end_date = null;
+        updates.next_occurrence = today;
+      }
+      await updateRecurring(db, recurringId, updates);
       const count = await processRecurringRuleById(db, recurringId, today);
       emitDbEvent("recurring-changed");
       if (count > 0) emitDbEvent("transactions-changed");
     },
-    [db]
+    [db, items]
   );
 
   return { items, loading, add, update, remove, stopRecurrence, resumeRecurrence, updateRuleAndSync, refresh };

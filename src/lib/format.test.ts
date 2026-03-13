@@ -121,10 +121,27 @@ describe("getToday", () => {
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it("returns the correct date for a pinned time", () => {
+  it("returns the correct date for a pinned time in UTC", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-15T12:00:00Z"));
-    expect(getToday()).toBe("2026-03-15");
+    expect(getToday("UTC")).toBe("2026-03-15");
+    vi.useRealTimers();
+  });
+
+  it("returns the correct date at midnight UTC when Dubai is already the next day", () => {
+    vi.useFakeTimers();
+    // Midnight UTC = 4:00 AM Dubai time (already March 15)
+    vi.setSystemTime(new Date("2026-03-15T00:00:00Z"));
+    expect(getToday("Asia/Dubai")).toBe("2026-03-15");
+    vi.useRealTimers();
+  });
+
+  it("returns next day for Dubai when UTC is still previous day evening", () => {
+    vi.useFakeTimers();
+    // 21:00 UTC = 01:00 AM next day in Dubai
+    vi.setSystemTime(new Date("2026-03-14T21:00:00Z"));
+    expect(getToday("Asia/Dubai")).toBe("2026-03-15");
+    expect(getToday("UTC")).toBe("2026-03-14");
     vi.useRealTimers();
   });
 });

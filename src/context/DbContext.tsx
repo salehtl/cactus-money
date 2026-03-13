@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
 import { DbClient } from "../db/client.ts";
 import { processRecurringRules } from "../db/queries/recurring.ts";
-import { formatLocalDate } from "../lib/recurring.ts";
+import { getToday, setAppTimezone, DEFAULT_TIMEZONE } from "../lib/format.ts";
+import { getSetting } from "../db/queries/settings.ts";
 import { emitDbEvent } from "../lib/db-events.ts";
 
 const DbContext = createContext<DbClient | null>(null);
@@ -23,8 +24,12 @@ export function DbProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready || schedulerRan.current) return;
     schedulerRan.current = true;
-    const today = formatLocalDate(new Date());
-    processRecurringRules(client, today)
+    // Load timezone from settings before running scheduler
+    getSetting(client, "timezone")
+      .then((tz) => {
+        if (tz) setAppTimezone(tz);
+        return processRecurringRules(client, getToday());
+      })
       .then((count) => {
         if (count > 0) {
           emitDbEvent("transactions-changed");

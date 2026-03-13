@@ -6,6 +6,7 @@ import { useToast } from "../components/ui/Toast.tsx";
 import { useRecurring } from "../hooks/useRecurring.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { formatCurrency } from "../lib/format.ts";
+import { monthlyEquivalent } from "../lib/recurring.ts";
 import { RecurringTable } from "../components/recurring/table/RecurringTable.tsx";
 
 export const Route = createFileRoute("/recurring")({
@@ -22,8 +23,14 @@ function RecurringPage() {
   const activeIncome = items.filter((r) => r.is_active && r.type === "income");
   const activeExpense = items.filter((r) => r.is_active && r.type === "expense");
   const inactive = items.filter((r) => !r.is_active);
-  const incomeTotal = activeIncome.reduce((s, r) => s + r.amount, 0);
-  const expenseTotal = activeExpense.reduce((s, r) => s + r.amount, 0);
+  const inactiveIncome = inactive.filter((r) => r.type === "income");
+  const inactiveExpense = inactive.filter((r) => r.type === "expense");
+  const incomeTotal = activeIncome.reduce(
+    (s, r) => s + monthlyEquivalent(r.amount, r.frequency, r.custom_interval_days), 0
+  );
+  const expenseTotal = activeExpense.reduce(
+    (s, r) => s + monthlyEquivalent(r.amount, r.frequency, r.custom_interval_days), 0
+  );
 
   const handleCreateCategory = useCallback(
     async (name: string, isIncome: boolean) => {
@@ -113,7 +120,7 @@ function RecurringPage() {
         />
       </div>
 
-      {/* Inactive rules */}
+      {/* Inactive rules — split by type */}
       {inactive.length > 0 && (
         <div className="mt-6">
           <button
@@ -128,18 +135,36 @@ function RecurringPage() {
           </button>
 
           {showInactive && (
-            <RecurringTable
-              type="expense"
-              items={inactive}
-              total={0}
-              categories={categories}
-              onEditField={handleEditField}
-              onToggleActive={handleToggleActive}
-              onDelete={handleDelete}
-              onAdd={handleAdd}
-              onCreateCategory={handleCreateCategory}
-              inactive
-            />
+            <div className="space-y-4">
+              {inactiveIncome.length > 0 && (
+                <RecurringTable
+                  type="income"
+                  items={inactiveIncome}
+                  total={0}
+                  categories={categories}
+                  onEditField={handleEditField}
+                  onToggleActive={handleToggleActive}
+                  onDelete={handleDelete}
+                  onAdd={handleAdd}
+                  onCreateCategory={handleCreateCategory}
+                  inactive
+                />
+              )}
+              {inactiveExpense.length > 0 && (
+                <RecurringTable
+                  type="expense"
+                  items={inactiveExpense}
+                  total={0}
+                  categories={categories}
+                  onEditField={handleEditField}
+                  onToggleActive={handleToggleActive}
+                  onDelete={handleDelete}
+                  onAdd={handleAdd}
+                  onCreateCategory={handleCreateCategory}
+                  inactive
+                />
+              )}
+            </div>
           )}
         </div>
       )}
@@ -169,18 +194,21 @@ function RecurringSummary({ income, expenses }: { income: number; expenses: numb
   return (
     <div className="flex items-stretch gap-3 overflow-x-auto mb-5">
       <div className="flex-1 min-w-[140px] bg-surface rounded-xl border border-border p-3">
-        <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Recurring Income</div>
+        <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Monthly Income</div>
         <div className="text-lg font-bold tabular-nums text-success">{formatCurrency(income)}</div>
+        <div className="text-[10px] text-text-light">projected / month</div>
       </div>
       <div className="flex-1 min-w-[140px] bg-surface rounded-xl border border-border p-3">
-        <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Recurring Expenses</div>
+        <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Monthly Expenses</div>
         <div className="text-lg font-bold tabular-nums">{formatCurrency(expenses)}</div>
+        <div className="text-[10px] text-text-light">projected / month</div>
       </div>
       <div className="flex-1 min-w-[140px] bg-surface rounded-xl border border-border p-3">
         <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Net</div>
         <div className={`text-lg font-bold tabular-nums ${net >= 0 ? "text-success" : "text-danger"}`}>
           {net >= 0 ? "+" : ""}{formatCurrency(Math.abs(net))}
         </div>
+        <div className="text-[10px] text-text-light">projected / month</div>
       </div>
     </div>
   );
