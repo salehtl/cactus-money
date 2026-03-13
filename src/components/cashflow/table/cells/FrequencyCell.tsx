@@ -9,6 +9,7 @@ interface FrequencyCellProps {
   onCommit: (value: string | null) => void;
   onCancel: () => void;
   required?: boolean;
+  readOnly?: boolean;
 }
 
 export function FrequencyCell({
@@ -18,6 +19,7 @@ export function FrequencyCell({
   onCommit,
   onCancel,
   required,
+  readOnly,
 }: FrequencyCellProps) {
   const shortLabel = value ? FREQUENCIES.find((f) => f.value === value)?.short ?? value : null;
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -37,7 +39,7 @@ export function FrequencyCell({
     <div className="hidden sm:flex justify-center relative">
       <div
         className="cursor-default"
-        onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+        onClick={(e) => { e.stopPropagation(); if (!readOnly) onStartEdit(); }}
       >
         {shortLabel ? (
           <span className="inline-flex items-center gap-0.5 px-1 py-px rounded text-[10px] font-semibold bg-accent/8 text-accent leading-tight">

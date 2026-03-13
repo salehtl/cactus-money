@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { PageHeader } from "../components/layout/PageHeader.tsx";
 import { Button } from "../components/ui/Button.tsx";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog.tsx";
 import { RecurringScopeModal } from "../components/ui/RecurringScopeModal.tsx";
+import { RecurringDeleteModal } from "../components/ui/RecurringDeleteModal.tsx";
 import { useToast } from "../components/ui/Toast.tsx";
 import { CashflowToolbar } from "../components/cashflow/CashflowToolbar.tsx";
 import { SingleMonthView } from "../components/cashflow/SingleMonthView.tsx";
@@ -14,7 +15,7 @@ import { useCashflow } from "../hooks/useCashflow.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { useDb } from "../context/DbContext.tsx";
 import { getSetting, setSetting } from "../db/queries/settings.ts";
-import { getCurrentMonth, formatCurrency } from "../lib/format.ts";
+import { getCurrentMonth, formatCurrency, stepMonth } from "../lib/format.ts";
 import type { GroupBy } from "../lib/cashflow.ts";
 
 export const Route = createFileRoute("/")({
@@ -38,6 +39,9 @@ function CashflowPage() {
   const [groupBy, setGroupBy] = useState<GroupBy>("category");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [pendingRecurringDelete, setPendingRecurringDelete] = useState<{ txnId: string; recurringId: string; date: string } | null>(null);
+  const [pendingBulkDelete, setPendingBulkDelete] = useState<{ ids: string[]; recurringCount: number } | null>(null);
+  const clearSelectionRef = useRef<(() => void) | null>(null);
   const [pdfFiles, setPdfFiles] = useState<File[] | null>(null);
   const [pendingRecurringEdit, setPendingRecurringEdit] = useState<PendingRecurringEdit | null>(null);
 
@@ -48,6 +52,46 @@ function CashflowPage() {
     });
   }, [db]);
 
+  // Arrow left/right to navigate months (when not editing)
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.target as HTMLElement)?.isContentEditable) return;
+      if (document.querySelector("dialog[open]")) return;
+      e.preventDefault();
+      setMonth((m) => stepMonth(m, e.key === "ArrowLeft" ? -1 : 1));
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Swipe left/right to navigate months on mobile
+  const touchRef = useRef<{ x: number; y: number; swiped: boolean } | null>(null);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (t) touchRef.current = { x: t.clientX, y: t.clientY, swiped: false };
+  }, []);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    const start = touchRef.current;
+    const t = e.touches[0];
+    if (!start || !t || start.swiped) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Only trigger if horizontal movement dominates and exceeds threshold
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      start.swiped = true;
+      setMonth((m) => stepMonth(m, dx > 0 ? -1 : 1));
+    }
+  }, []);
+
+  const onTouchEnd = useCallback(() => {
+    touchRef.current = null;
+  }, []);
+
   function handleGroupByChange(value: GroupBy) {
     setGroupBy(value);
     setSetting(db, "cashflow_group_by", value);
@@ -55,6 +99,7 @@ function CashflowPage() {
 
   const { categories, add: addCategory } = useCategories();
   const {
+    transactions,
     incomeGroups,
     expenseGroups,
     summary,
@@ -66,12 +111,23 @@ function CashflowPage() {
     bulkEditTransactions,
     stopAndPurgeRecurrence,
     attachRecurrence,
-    updateRecurringFrequency,
     editRecurringInstance,
+    deleteRecurringInstance,
+    bulkDeleteRecurring,
   } = useCashflow(month, groupBy);
 
+  const txnById = useMemo(() => {
+    const map = new Map<string, (typeof transactions)[number]>();
+    for (const t of transactions) map.set(t.id, t);
+    return map;
+  }, [transactions]);
+
   return (
-    <div>
+    <div
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
       <PageHeader
         title="Cashflow"
         action={
@@ -110,7 +166,14 @@ function CashflowPage() {
           onToggleStatus={(id, newStatus) => {
             editTransaction(id, { status: newStatus });
           }}
-          onDeleteRow={(id) => setDeleteTarget(id)}
+          onDeleteRow={(id) => {
+            const txn = txnById.get(id);
+            if (txn?.recurring_id) {
+              setPendingRecurringDelete({ txnId: id, recurringId: txn.recurring_id, date: txn.date });
+            } else {
+              setDeleteTarget(id);
+            }
+          }}
           onStopRecurrence={async (recurringId) => {
             await stopAndPurgeRecurrence(recurringId);
             toast("Recurrence stopped");
@@ -193,13 +256,10 @@ function CashflowPage() {
             await attachRecurrence(txnId, row, frequency);
             toast("Recurring rule created");
           }}
-          onUpdateRecurringFrequency={async (recurringId, frequency) => {
-            await updateRecurringFrequency(recurringId, frequency);
-            toast("Frequency updated");
-          }}
-          onBulkDeleteRows={async (ids) => {
-            await removeTransactions(ids);
-            toast(`${ids.length} transaction${ids.length !== 1 ? "s" : ""} deleted`);
+          onBulkDeleteRequest={(ids, clearSelection) => {
+            clearSelectionRef.current = clearSelection;
+            const recurringCount = ids.filter((id) => txnById.get(id)?.recurring_id).length;
+            setPendingBulkDelete({ ids, recurringCount });
           }}
           onBulkEditRows={async (ids, updates) => {
             await bulkEditTransactions(ids, updates);
@@ -244,6 +304,77 @@ function CashflowPage() {
         confirmLabel="Delete"
         variant="danger"
       />
+
+      {pendingRecurringDelete && (
+        <RecurringDeleteModal
+          open={true}
+          totalCount={1}
+          recurringCount={1}
+          onCancel={() => setPendingRecurringDelete(null)}
+          onJustThis={async () => {
+            const p = pendingRecurringDelete;
+            setPendingRecurringDelete(null);
+            await deleteRecurringInstance(p.txnId, p.recurringId, p.date, "one");
+            toast("Transaction deleted");
+          }}
+          onAllFuture={async () => {
+            const p = pendingRecurringDelete;
+            setPendingRecurringDelete(null);
+            await deleteRecurringInstance(p.txnId, p.recurringId, p.date, "all");
+            toast("Recurrence stopped & future transactions deleted");
+          }}
+        />
+      )}
+
+      {/* Bulk delete: non-recurring → simple confirm, recurring → scope modal */}
+      {pendingBulkDelete && pendingBulkDelete.recurringCount === 0 && (
+        <ConfirmDialog
+          open={true}
+          onClose={() => { setPendingBulkDelete(null); }}
+          onConfirm={async () => {
+            const ids = pendingBulkDelete.ids;
+            setPendingBulkDelete(null);
+            await removeTransactions(ids);
+            clearSelectionRef.current?.();
+            toast(`${ids.length} transaction${ids.length !== 1 ? "s" : ""} deleted`);
+          }}
+          title={`Delete ${pendingBulkDelete.ids.length} Transaction${pendingBulkDelete.ids.length !== 1 ? "s" : ""}`}
+          message={`Delete ${pendingBulkDelete.ids.length} transaction${pendingBulkDelete.ids.length !== 1 ? "s" : ""}? This cannot be undone.`}
+          confirmLabel="Delete"
+          variant="danger"
+        />
+      )}
+      {pendingBulkDelete && pendingBulkDelete.recurringCount > 0 && (
+        <RecurringDeleteModal
+          open={true}
+          totalCount={pendingBulkDelete.ids.length}
+          recurringCount={pendingBulkDelete.recurringCount}
+          onCancel={() => setPendingBulkDelete(null)}
+          onJustThis={async () => {
+            const { ids } = pendingBulkDelete;
+            setPendingBulkDelete(null);
+            const txnData = ids.map((id) => {
+              const txn = txnById.get(id);
+              return { id, recurring_id: txn?.recurring_id ?? null, date: txn?.date ?? "" };
+            });
+            await bulkDeleteRecurring(txnData, "one");
+            clearSelectionRef.current?.();
+            toast(`${ids.length} transaction${ids.length !== 1 ? "s" : ""} deleted`);
+          }}
+          onAllFuture={async () => {
+            const { ids } = pendingBulkDelete;
+            setPendingBulkDelete(null);
+            // Reuse same txnData shape as onJustThis — only scope differs
+            const txnData = ids.map((id) => {
+              const txn = txnById.get(id);
+              return { id, recurring_id: txn?.recurring_id ?? null, date: txn?.date ?? "" };
+            });
+            await bulkDeleteRecurring(txnData, "all");
+            clearSelectionRef.current?.();
+            toast("Recurrence stopped & future transactions deleted");
+          }}
+        />
+      )}
 
       {pdfFiles && pdfFiles.length > 0 && (
         <PdfImportModal

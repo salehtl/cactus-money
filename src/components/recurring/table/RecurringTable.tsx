@@ -29,6 +29,7 @@ interface RecurringTableProps {
     mode: "auto";
     is_variable?: boolean;
   }) => Promise<void>;
+  onBulkDelete?: (ids: string[]) => void;
   onCreateCategory?: (name: string, isIncome: boolean) => Promise<string>;
   inactive?: boolean;
 }
@@ -41,6 +42,7 @@ export function RecurringTable({
   onEditField,
   onToggleActive,
   onDelete,
+  onBulkDelete,
   onAdd,
   onCreateCategory,
   inactive,
@@ -188,7 +190,7 @@ export function RecurringTable({
         <RecurringBulkActionBar
           selectedIds={state.selectedIds}
           categories={filteredCategories}
-          onDelete={(ids) => { for (const id of ids) onDelete(id); }}
+          onDelete={(ids) => { if (onBulkDelete) { onBulkDelete(ids); } else { for (const id of ids) onDelete(id); } }}
           onToggleActive={(ids) => { for (const id of ids) onToggleActive(id); }}
           onChangeCategory={(ids, catId) => { for (const id of ids) onEditField(id, { category_id: catId }); }}
           onClearSelection={() => dispatch({ type: "CLEAR_SELECTION" })}

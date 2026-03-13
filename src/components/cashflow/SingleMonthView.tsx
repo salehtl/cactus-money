@@ -6,7 +6,6 @@ import { SummaryStrip } from "./SummaryStrip.tsx";
 import { ReviewBanner } from "./ReviewBanner.tsx";
 import { TransactionTable } from "./table/TransactionTable.tsx";
 import { BulkActionBar } from "./table/BulkActionBar.tsx";
-import { ConfirmDialog } from "../ui/ConfirmDialog.tsx";
 
 export interface SingleMonthViewProps {
   incomeGroups: CashflowGroup[];
@@ -35,8 +34,7 @@ export interface SingleMonthViewProps {
   onDuplicateRow?: (row: CashflowRow) => void;
   onCreateCategory?: (name: string, isIncome: boolean) => Promise<string>;
   onAttachRecurrence?: (txnId: string, row: CashflowRow, frequency: RecurringTransaction["frequency"]) => void;
-  onUpdateRecurringFrequency?: (recurringId: string, frequency: RecurringTransaction["frequency"]) => void;
-  onBulkDeleteRows: (ids: string[]) => void | Promise<void>;
+  onBulkDeleteRequest: (ids: string[], clearSelection: () => void) => void;
   onBulkEditRows: (ids: string[], updates: { status?: "planned" | "confirmed"; category_id?: string | null }) => void | Promise<void>;
 }
 
@@ -54,15 +52,13 @@ export function SingleMonthView({
   onDuplicateRow,
   onCreateCategory,
   onAttachRecurrence,
-  onUpdateRecurringFrequency,
-  onBulkDeleteRows,
+  onBulkDeleteRequest,
   onBulkEditRows,
 }: SingleMonthViewProps) {
   const [incomeSelectedIds, setIncomeSelectedIds] = useState<Set<string>>(new Set());
   const [expenseSelectedIds, setExpenseSelectedIds] = useState<Set<string>>(new Set());
   const [clearIncomeSig, setClearIncomeSig] = useState(0);
   const [clearExpenseSig, setClearExpenseSig] = useState(0);
-  const [bulkDeletePending, setBulkDeletePending] = useState<string[]>([]);
 
   const hasIncomeSelection = incomeSelectedIds.size > 0;
   const hasExpenseSelection = expenseSelectedIds.size > 0;
@@ -120,7 +116,7 @@ export function SingleMonthView({
         onDuplicateRow={onDuplicateRow}
         onCreateCategory={onCreateCategory}
         onAttachRecurrence={onAttachRecurrence}
-        onUpdateRecurringFrequency={onUpdateRecurringFrequency}
+
         onSelectionChange={handleIncomeSelection}
         clearSelectionSignal={clearIncomeSig}
       />
@@ -140,7 +136,7 @@ export function SingleMonthView({
         onDuplicateRow={onDuplicateRow}
         onCreateCategory={onCreateCategory}
         onAttachRecurrence={onAttachRecurrence}
-        onUpdateRecurringFrequency={onUpdateRecurringFrequency}
+
         onSelectionChange={handleExpenseSelection}
         clearSelectionSignal={clearExpenseSig}
       />
@@ -149,26 +145,12 @@ export function SingleMonthView({
         <BulkActionBar
           selectedIds={allSelectedIds}
           categories={bulkCategories}
-          onDelete={(ids) => setBulkDeletePending(ids)}
+          onDelete={(ids) => onBulkDeleteRequest(ids, handleClearSelection)}
           onChangeStatus={(ids, status) => { void onBulkEditRows(ids, { status }); handleClearSelection(); }}
           onChangeCategory={(ids, catId) => { void onBulkEditRows(ids, { category_id: catId }); handleClearSelection(); }}
           onClearSelection={handleClearSelection}
         />
       )}
-
-      <ConfirmDialog
-        open={bulkDeletePending.length > 0}
-        onClose={() => setBulkDeletePending([])}
-        onConfirm={async () => {
-          await onBulkDeleteRows(bulkDeletePending);
-          setBulkDeletePending([]);
-          handleClearSelection();
-        }}
-        title={`Delete ${bulkDeletePending.length} Transaction${bulkDeletePending.length !== 1 ? "s" : ""}`}
-        message={`Delete ${bulkDeletePending.length} transaction${bulkDeletePending.length !== 1 ? "s" : ""}? This cannot be undone.`}
-        confirmLabel="Delete"
-        variant="danger"
-      />
     </div>
   );
 }

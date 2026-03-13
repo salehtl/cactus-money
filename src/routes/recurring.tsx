@@ -17,7 +17,7 @@ function RecurringPage() {
   const { items, loading, add, remove, stopRecurrence, resumeRecurrence, updateRuleAndSync } = useRecurring();
   const { categories, add: addCategory } = useCategories();
   const { toast } = useToast();
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteIds, setDeleteIds] = useState<string[]>([]);
   const [showInactive, setShowInactive] = useState(false);
 
   const activeIncome = items.filter((r) => r.is_active && r.type === "income");
@@ -74,7 +74,11 @@ function RecurringPage() {
   }, [items, stopRecurrence, resumeRecurrence, toast]);
 
   const handleDelete = useCallback((id: string) => {
-    setDeleteId(id);
+    setDeleteIds([id]);
+  }, []);
+
+  const handleBulkDelete = useCallback((ids: string[]) => {
+    setDeleteIds(ids);
   }, []);
 
   if (loading) {
@@ -101,6 +105,7 @@ function RecurringPage() {
           onEditField={handleEditField}
           onToggleActive={handleToggleActive}
           onDelete={handleDelete}
+          onBulkDelete={handleBulkDelete}
           onAdd={handleAdd}
           onCreateCategory={handleCreateCategory}
         />
@@ -115,6 +120,7 @@ function RecurringPage() {
           onEditField={handleEditField}
           onToggleActive={handleToggleActive}
           onDelete={handleDelete}
+          onBulkDelete={handleBulkDelete}
           onAdd={handleAdd}
           onCreateCategory={handleCreateCategory}
         />
@@ -145,6 +151,7 @@ function RecurringPage() {
                   onEditField={handleEditField}
                   onToggleActive={handleToggleActive}
                   onDelete={handleDelete}
+          onBulkDelete={handleBulkDelete}
                   onAdd={handleAdd}
                   onCreateCategory={handleCreateCategory}
                   inactive
@@ -159,6 +166,7 @@ function RecurringPage() {
                   onEditField={handleEditField}
                   onToggleActive={handleToggleActive}
                   onDelete={handleDelete}
+          onBulkDelete={handleBulkDelete}
                   onAdd={handleAdd}
                   onCreateCategory={handleCreateCategory}
                   inactive
@@ -170,16 +178,19 @@ function RecurringPage() {
       )}
 
       <ConfirmDialog
-        open={!!deleteId}
-        onClose={() => setDeleteId(null)}
+        open={deleteIds.length > 0}
+        onClose={() => setDeleteIds([])}
         onConfirm={async () => {
-          if (deleteId) {
-            await remove(deleteId);
-            toast("Rule deleted");
+          for (const id of deleteIds) {
+            await remove(id);
           }
+          toast(deleteIds.length === 1 ? "Rule deleted" : `${deleteIds.length} rules deleted`);
+          setDeleteIds([]);
         }}
-        title="Delete recurring rule"
-        message="This will delete the rule permanently. Existing transactions created by this rule will remain."
+        title={deleteIds.length === 1 ? "Delete recurring rule" : `Delete ${deleteIds.length} recurring rules`}
+        message={deleteIds.length === 1
+          ? "This will delete the rule permanently. Existing transactions created by this rule will remain."
+          : `This will delete ${deleteIds.length} rules permanently. Existing transactions created by these rules will remain.`}
         confirmLabel="Delete"
         variant="danger"
       />

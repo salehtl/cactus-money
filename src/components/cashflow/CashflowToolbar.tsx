@@ -1,5 +1,5 @@
 import { MonthPicker } from "../ui/MonthPicker.tsx";
-import { getCurrentMonth } from "../../lib/format.ts";
+import { getCurrentMonth, stepMonth } from "../../lib/format.ts";
 import type { GroupBy } from "../../lib/cashflow.ts";
 
 interface CashflowToolbarProps {
@@ -7,12 +7,6 @@ interface CashflowToolbarProps {
   onMonthChange: (month: string) => void;
   groupBy: GroupBy;
   onGroupByChange: (groupBy: GroupBy) => void;
-}
-
-function stepMonth(month: string, delta: number): string {
-  const [y, m] = month.split("-").map(Number) as [number, number];
-  const d = new Date(y, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export function CashflowToolbar({
@@ -27,9 +21,10 @@ export function CashflowToolbar({
       <div className="flex items-center gap-0.5">
         <button
           onClick={() => onMonthChange(stepMonth(month, -1))}
-          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-surface-alt transition-colors cursor-pointer"
-          title="Previous month"
+          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-surface-alt transition-colors cursor-pointer flex items-center gap-0.5"
+          title="Previous month (←)"
         >
+          <kbd className="hidden sm:inline-block text-[9px] leading-none px-1 py-0.5 rounded border border-border-dark/40 bg-surface-alt text-text-light font-sans">←</kbd>
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
@@ -37,12 +32,13 @@ export function CashflowToolbar({
         <MonthPicker value={month} onChange={onMonthChange} />
         <button
           onClick={() => onMonthChange(stepMonth(month, 1))}
-          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-surface-alt transition-colors cursor-pointer"
-          title="Next month"
+          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-surface-alt transition-colors cursor-pointer flex items-center gap-0.5"
+          title="Next month (→)"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 18 15 12 9 6" />
           </svg>
+          <kbd className="hidden sm:inline-block text-[9px] leading-none px-1 py-0.5 rounded border border-border-dark/40 bg-surface-alt text-text-light font-sans">→</kbd>
         </button>
         {/* Today — appears only when not on current month */}
         {month !== getCurrentMonth() && (

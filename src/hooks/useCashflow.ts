@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useDb } from "../context/DbContext.tsx";
 import { getTransactionsForMonth } from "../db/queries/cashflow.ts";
 import { createTransaction, updateTransaction, deleteTransaction, deleteTransactionsBatch, updateTransactionsBatch, deleteFutureInstancesOfRule, updateFutureInstancesOfRule } from "../db/queries/transactions.ts";
-import { populateFutureMonth, createRecurring, updateRecurring, processRecurringRuleById } from "../db/queries/recurring.ts";
+import { populateFutureMonth, createRecurring, updateRecurring, processRecurringRuleById, addRecurringException } from "../db/queries/recurring.ts";
 import { buildCashflowRows, type CashflowGroup, type CashflowSummary, type GroupBy } from "../lib/cashflow.ts";
 import { emitDbEvent, onDbEvent } from "../lib/db-events.ts";
 import { getNextOccurrence, formatLocalDate } from "../lib/recurring.ts";
@@ -203,25 +203,34 @@ export function useCashflow(month: string, groupBy: GroupBy = "none") {
       });
       // Link this transaction as the first instance
       await updateTransaction(db, txnId, { recurring_id: ruleId } as Parameters<typeof updateTransaction>[2]);
-      // Advance next_occurrence past this first instance
-      const nextOcc = getNextOccurrence(row.date, frequency, anchorDay);
-      await updateRecurring(db, ruleId, { next_occurrence: nextOcc });
-      emitDbEvent("recurring-changed");
-      emitDbEvent("transactions-changed");
-    },
-    [db]
-  );
-
-  /**
-   * Change the frequency on an existing recurring rule (from Recur column).
-   * Deletes future instances and regenerates under new schedule.
-   */
-  const updateRecurringFrequency = useCallback(
-    async (recurringId: string, newFrequency: RecurringTransaction["frequency"]) => {
+      // Compute all expected occurrence dates and link matching existing transactions
+      // so the scheduler doesn't create duplicates
       const today = getToday();
-      await updateRecurring(db, recurringId, { frequency: newFrequency });
-      await deleteFutureInstancesOfRule(db, recurringId, today);
-      await processRecurringRuleById(db, recurringId, today);
+      let occ = row.date;
+      const occDates: string[] = [];
+      while (occ <= today) {
+        occDates.push(occ);
+        occ = getNextOccurrence(occ, frequency, anchorDay);
+      }
+      // Also include current-month future occurrences
+      const todayMonth = today.slice(0, 7);
+      while (occ.slice(0, 7) === todayMonth) {
+        occDates.push(occ);
+        occ = getNextOccurrence(occ, frequency, anchorDay);
+      }
+      if (occDates.length > 0) {
+        const placeholders = occDates.map(() => "?").join(",");
+        await db.exec(
+          `UPDATE transactions SET recurring_id = ?, updated_at = datetime('now')
+           WHERE recurring_id IS NULL AND payee = ? AND type = ? AND amount = ?
+           AND date IN (${placeholders})`,
+          [ruleId, row.label, row.type, row.amount, ...occDates]
+        );
+      }
+      // Advance next_occurrence past all linked instances
+      await updateRecurring(db, ruleId, { next_occurrence: occ });
+      // Generate any remaining catch-up + current-month occurrences (also auto-confirms past ones)
+      await processRecurringRuleById(db, ruleId, today);
       emitDbEvent("recurring-changed");
       emitDbEvent("transactions-changed");
     },
@@ -297,6 +306,73 @@ export function useCashflow(month: string, groupBy: GroupBy = "none") {
     [db]
   );
 
+  /**
+   * Delete a recurring instance with scope control.
+   * 'one' — delete this instance + add exception so the engine doesn't recreate it.
+   * 'all' — stop the rule + delete all future planned/review instances from this date.
+   */
+  const deleteRecurringInstance = useCallback(
+    async (txnId: string, recurringId: string, date: string, scope: "one" | "all") => {
+      if (scope === "one") {
+        await deleteTransaction(db, txnId);
+        await addRecurringException(db, recurringId, date);
+        emitDbEvent("transactions-changed");
+      } else {
+        await updateRecurring(db, recurringId, { is_active: false });
+        // Delete all planned/review instances from this date (inclusive covers the clicked row)
+        await deleteFutureInstancesOfRule(db, recurringId, date, true);
+        emitDbEvent("recurring-changed");
+        emitDbEvent("transactions-changed");
+      }
+    },
+    [db]
+  );
+
+  /**
+   * Bulk delete transactions with recurring awareness.
+   * 'one' — delete all selected + add exceptions for recurring ones.
+   * 'all' — stop each recurring rule + purge future instances + delete non-recurring ones.
+   */
+  const bulkDeleteRecurring = useCallback(
+    async (
+      txns: Array<{ id: string; recurring_id: string | null; date: string }>,
+      scope: "one" | "all"
+    ) => {
+      if (scope === "one") {
+        for (const txn of txns) {
+          if (txn.recurring_id) {
+            await addRecurringException(db, txn.recurring_id, txn.date);
+          }
+        }
+        await deleteTransactionsBatch(db, txns.map((t) => t.id));
+      } else {
+        // Group recurring by rule, find earliest date per rule
+        const ruleEarliestDate = new Map<string, string>();
+        const nonRecurringIds: string[] = [];
+        for (const txn of txns) {
+          if (txn.recurring_id) {
+            const existing = ruleEarliestDate.get(txn.recurring_id);
+            if (!existing || txn.date < existing) {
+              ruleEarliestDate.set(txn.recurring_id, txn.date);
+            }
+          } else {
+            nonRecurringIds.push(txn.id);
+          }
+        }
+        for (const [recurringId, earliestDate] of ruleEarliestDate) {
+          await updateRecurring(db, recurringId, { is_active: false });
+          await deleteFutureInstancesOfRule(db, recurringId, earliestDate, true);
+        }
+        if (nonRecurringIds.length > 0) {
+          await deleteTransactionsBatch(db, nonRecurringIds);
+        }
+        emitDbEvent("recurring-changed");
+      }
+      emitDbEvent("transactions-changed");
+    },
+    [db]
+  );
+
   return {
     transactions,
     incomeGroups,
@@ -311,7 +387,8 @@ export function useCashflow(month: string, groupBy: GroupBy = "none") {
     bulkEditTransactions,
     stopAndPurgeRecurrence,
     attachRecurrence,
-    updateRecurringFrequency,
     editRecurringInstance,
+    deleteRecurringInstance,
+    bulkDeleteRecurring,
   };
 }

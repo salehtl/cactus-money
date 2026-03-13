@@ -13,6 +13,7 @@ export interface ParsedTransaction {
   selected: boolean;
   duplicate?: boolean; // true if a matching transaction exists in the DB
   sourceFile?: string; // original filename for multi-file grouping
+  recurring_id?: string; // set during import if linked to a recurring rule
 }
 
 export interface ImportFile {
@@ -30,6 +31,7 @@ export type ImportState =
   | { step: "streaming"; transactions: ParsedTransaction[]; progress: ParseProgress; files: ImportFile[] }
   | { step: "rate-limited"; currentModel: string; fallbackModel: string; provider: ProviderId; files: ImportFile[]; transactions: ParsedTransaction[] }
   | { step: "reviewing"; transactions: ParsedTransaction[]; files: ImportFile[] }
+  | { step: "recurring-review"; transactions: ParsedTransaction[]; files: ImportFile[] }
   | { step: "importing"; transactions: ParsedTransaction[]; files: ImportFile[] }
   | { step: "done"; count: number; fileCount: number }
   | { step: "error"; code: ImportErrorCode; title: string; message: string; suggestion: string };

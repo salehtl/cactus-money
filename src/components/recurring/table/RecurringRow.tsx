@@ -52,7 +52,7 @@ export const RecurringRow = memo(function RecurringRow({
 }: RecurringRowProps) {
   const isIncome = item.type === "income";
   const cat = categories.find((c) => c.id === item.category_id);
-  const isDue = item.is_active && item.next_occurrence <= getToday();
+  const isDue = !!item.is_active && item.next_occurrence <= getToday();
   const inactiveReason = inactive ? getInactiveReason(item) : null;
 
   function handleRowClick(e: React.MouseEvent) {

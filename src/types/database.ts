@@ -61,6 +61,7 @@ export interface RecurringTransaction {
   is_active: number;
   anchor_day: number | null;
   is_variable: number;
+  exceptions: string;
   created_at: string;
   updated_at: string;
 }

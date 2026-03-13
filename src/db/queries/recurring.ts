@@ -100,11 +100,13 @@ export async function updateRecurring(
           ? parseInt(newStart.slice(8, 10), 10)
           : null,
       };
-      // Also recompute next_occurrence from today when frequency changes (unless explicitly provided)
-      if (updates.frequency !== undefined && updates.next_occurrence === undefined) {
+      // Recompute next_occurrence when frequency or start_date changes (unless explicitly provided)
+      if ((updates.frequency !== undefined || updates.start_date !== undefined) && updates.next_occurrence === undefined) {
         const today = getToday();
-        let occ = rows[0].next_occurrence;
-        // Advance from current next_occurrence until we're at/after today
+        // When start_date changes, recompute from the new start_date
+        // When only frequency changes, recompute from current next_occurrence
+        let occ = updates.start_date ?? rows[0].next_occurrence;
+        // Advance until we're at/after today
         while (occ < today) {
           occ = getNextOccurrence(occ, newFreq as RecurringTransaction["frequency"], updates.anchor_day, updates.custom_interval_days ?? null);
         }
@@ -156,6 +158,26 @@ export async function deleteRecurring(
   await db.exec("DELETE FROM recurring_transactions WHERE id = ?", [id]);
 }
 
+/** Add a date exception to a recurring rule so the engine won't recreate a deleted occurrence. */
+export async function addRecurringException(
+  db: DbClient,
+  recurringId: string,
+  date: string
+): Promise<void> {
+  const { rows } = await db.exec<{ exceptions: string }>(
+    "SELECT exceptions FROM recurring_transactions WHERE id = ?",
+    [recurringId]
+  );
+  const existing = parseExceptions(rows[0]?.exceptions);
+  if (!existing.includes(date)) {
+    existing.push(date);
+    await db.exec(
+      `UPDATE recurring_transactions SET exceptions = ?, ${SET_UPDATED_AT} WHERE id = ?`,
+      [JSON.stringify(existing), recurringId]
+    );
+  }
+}
+
 export async function getDueRecurring(
   db: DbClient,
   date: string
@@ -171,6 +193,10 @@ export async function getDueRecurring(
 // Helpers
 // ---------------------------------------------------------------------------
 
+function parseExceptions(raw: string | undefined | null): string[] {
+  return JSON.parse(raw || "[]") as string[];
+}
+
 // ---------------------------------------------------------------------------
 // New scheduler functions
 // ---------------------------------------------------------------------------
@@ -179,12 +205,20 @@ export async function getDueRecurring(
 async function processRule(db: DbClient, rule: RecurringTransaction, today: string): Promise<number> {
   const todayMonth = today.slice(0, 7);
 
+  // Auto-confirm any planned transactions for this rule that are now in the past
+  await db.exec(
+    `UPDATE transactions SET status = 'confirmed', updated_at = datetime('now')
+     WHERE recurring_id = ? AND status = 'planned' AND date < ?`,
+    [rule.id, today]
+  );
+
   // Prefetch all existing transaction dates for this rule to avoid N+1 queries
   const { rows: existingRows } = await db.exec<{ date: string }>(
     "SELECT date FROM transactions WHERE recurring_id = ? AND date >= ?",
     [rule.id, rule.next_occurrence]
   );
   const existingDates = new Set(existingRows.map((r) => r.date));
+  const exceptions = new Set<string>(parseExceptions(rule.exceptions));
 
   let occ = rule.next_occurrence;
   let deactivated = false;
@@ -198,7 +232,7 @@ async function processRule(db: DbClient, rule: RecurringTransaction, today: stri
       break;
     }
 
-    if (!existingDates.has(occ)) {
+    if (!existingDates.has(occ) && !exceptions.has(occ)) {
       await createTransaction(db, {
         id: crypto.randomUUID(),
         amount: rule.amount,
@@ -230,7 +264,7 @@ async function processRule(db: DbClient, rule: RecurringTransaction, today: stri
   if (!deactivated) {
     while (occ.slice(0, 7) === todayMonth) {
       if (rule.end_date && occ > rule.end_date) break;
-      if (!existingDates.has(occ)) {
+      if (!existingDates.has(occ) && !exceptions.has(occ)) {
         await createTransaction(db, {
           id: crypto.randomUUID(),
           amount: rule.amount,
@@ -306,7 +340,11 @@ export async function populateFutureMonth(
     const occurrences = computeOccurrencesForMonth(rule, monthStart, monthEnd);
     if (occurrences.length === 0) continue;
 
+    const exceptions = new Set<string>(parseExceptions(rule.exceptions));
+
     for (const occ of occurrences) {
+      if (exceptions.has(occ)) continue;
+
       // Per-date dedup: only insert if no transaction exists for this rule on this exact date
       const txnId = crypto.randomUUID();
       await db.exec(

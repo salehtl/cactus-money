@@ -10,12 +10,19 @@ import { getSetting, setSetting } from "../../db/queries/settings.ts";
 import { parseStatement, PAGES_PER_BATCH } from "../../lib/pdf-import/parse-statement.ts";
 import { getPageCount } from "../../lib/pdf-import/pdf-to-images.ts";
 import { bulkInsertTransactions, getExistingFingerprints, txnFingerprint } from "../../lib/pdf-import/bulk-insert.ts";
+import { detectRecurringPatterns, normalizePayee, diceCoefficient } from "../../lib/pdf-import/detect-recurring.ts";
+import type { RecurringCandidate } from "../../lib/pdf-import/detect-recurring.ts";
+import { createRecurring, getRecurringTransactions } from "../../db/queries/recurring.ts";
+import { getNextOccurrence } from "../../lib/recurring.ts";
+import { emitDbEvent } from "../../lib/db-events.ts";
 import { ImportError } from "../../lib/pdf-import/errors.ts";
 import type { ProviderId } from "../../lib/pdf-import/llm-provider.ts";
 import { DEFAULT_PROVIDER, PROVIDER_DEFAULTS, PROVIDER_FALLBACK_MODELS, PROVIDER_RATE_LIMIT_URLS, getModelLabel } from "../../lib/pdf-import/providers/index.ts";
-import { formatCurrency } from "../../lib/format.ts";
+import { formatCurrency, formatDateShort, getToday } from "../../lib/format.ts";
 import type { Category } from "../../types/database.ts";
 import type { ParsedTransaction, ImportState, ImportFile } from "../../lib/pdf-import/types.ts";
+import { FREQUENCIES } from "../cashflow/table/types.ts";
+import { ANCHOR_DAY_FREQUENCIES } from "../../db/schema.ts";
 import type { ParseProgress } from "../../lib/pdf-import/parse-statement.ts";
 
 const MAX_TOTAL_PAGES = 50;
@@ -36,10 +43,29 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
   const txnQueueRef = useRef<ParsedTransaction[]>([]);
   const drainTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const filesRef = useRef<ImportFile[]>([]);
+  const candidatesRef = useRef<RecurringCandidate[]>([]);
   const streamedTxnsRef = useRef<ParsedTransaction[]>([]);
   const [modelLabel, setModelLabel] = useState("");
 
   const isSingleFile = files.length === 1;
+
+  /** Shared import helper — wraps bulkInsert with state transitions and error handling */
+  async function performImport(
+    txns: ParsedTransaction[],
+    fallbackStep: ImportState["step"],
+    preInsert?: () => Promise<void>,
+  ) {
+    setState({ step: "importing", transactions: txns, files: filesRef.current });
+    try {
+      if (preInsert) await preInsert();
+      const count = await bulkInsertTransactions(db, txns);
+      const doneFileCount = filesRef.current.filter((f) => f.status === "done").length;
+      setState({ step: "done", count, fileCount: doneFileCount || fileCount });
+    } catch (e: unknown) {
+      toast(`Import failed: ${e instanceof Error ? e.message : "Unknown error"}`, "error");
+      setState({ step: fallbackStep, transactions: txns, files: filesRef.current } as ImportState);
+    }
+  }
 
   // Drip queue: reveals buffered transactions one at a time
   function startDraining() {
@@ -315,6 +341,8 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
           ? "Analyzing Statement" + (fileCount > 1 ? "s" : "") + modelSuffix
           : state.step === "rate-limited"
             ? "Rate Limited"
+            : state.step === "recurring-review"
+              ? "Recurring Patterns"
             : state.step === "reviewing" || state.step === "importing"
             ? "Review Transactions"
             : state.step === "done"
@@ -323,7 +351,7 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
                 ? state.title
                 : "Import Statement(s)";
 
-  const isWide = state.step === "reviewing" || state.step === "importing" || state.step === "streaming";
+  const isWide = state.step === "reviewing" || state.step === "importing" || state.step === "streaming" || state.step === "recurring-review";
 
   return (
     <Modal
@@ -385,17 +413,88 @@ export function PdfImportModal({ open, onClose, files, categories }: PdfImportMo
           files={state.files}
           singleFile={isSingleFile}
           onImport={async (txns) => {
-            setState({ step: "importing", transactions: txns, files: filesRef.current });
-            try {
-              const count = await bulkInsertTransactions(db, txns);
-              const doneFileCount = filesRef.current.filter((f) => f.status === "done").length;
-              setState({ step: "done", count, fileCount: doneFileCount || fileCount });
-            } catch (e: any) {
-              toast(`Import failed: ${e.message}`, "error");
-              setState({ step: "reviewing", transactions: txns, files: filesRef.current });
+            // Detect recurring patterns before importing
+            const candidates = detectRecurringPatterns(txns);
+            if (candidates.length > 0) {
+              // Check for existing rule collisions
+              try {
+                const existingRules = await getRecurringTransactions(db);
+                const ruleNorms = existingRules.map((r) => normalizePayee(r.payee));
+                for (const c of candidates) {
+                  for (let ri = 0; ri < existingRules.length; ri++) {
+                    const rule = existingRules[ri]!;
+                    if (!rule.is_active || rule.type !== c.type) continue;
+                    if (diceCoefficient(c.normalizedPayee, ruleNorms[ri]!) >= 0.8) {
+                      c.existingRuleWarning = `Similar rule: ${rule.payee}`;
+                      c.selected = false;
+                      break;
+                    }
+                  }
+                }
+              } catch {
+                // Non-fatal — proceed without collision warnings
+              }
+              candidatesRef.current = candidates;
+              setState({ step: "recurring-review", transactions: txns, files: filesRef.current });
+              return;
             }
+            // No patterns → import directly
+            performImport(txns, "reviewing");
           }}
           onCancel={handleClose}
+        />
+      )}
+      {state.step === "recurring-review" && (
+        <RecurringReviewView
+          candidates={candidatesRef.current}
+          transactions={state.transactions}
+          onSkip={(txns) => performImport(txns, "recurring-review")}
+          onCreateAndImport={(selected, txns) => {
+            // Precompute normalized payees to avoid redundant calls in linking loop
+            const txnNorms = txns.map((t) => normalizePayee(t.payee));
+            // Immutably link transactions to recurring rules (use Dice >= 0.8 to match detection grouping)
+            const ruleIds = new Map<RecurringCandidate, string>();
+            let linked = txns;
+            for (const candidate of selected) {
+              const ruleId = crypto.randomUUID();
+              ruleIds.set(candidate, ruleId);
+              linked = linked.map((t, i) => {
+                if (!t.selected) return t;
+                for (const occ of candidate.occurrences) {
+                  if (t.date === occ.date && t.amount === occ.amount && diceCoefficient(txnNorms[i]!, candidate.normalizedPayee) >= 0.8) {
+                    return { ...t, recurring_id: ruleId };
+                  }
+                }
+                return t;
+              });
+            }
+            // Advance each candidate's nextOccurrence to at/after today
+            const today = getToday();
+            for (const candidate of selected) {
+              while (candidate.nextOccurrence < today) {
+                candidate.nextOccurrence = getNextOccurrence(
+                  candidate.nextOccurrence, candidate.inferredFrequency, candidate.anchorDay
+                );
+              }
+            }
+            performImport(linked, "recurring-review", async () => {
+              for (const candidate of selected) {
+                await createRecurring(db, {
+                  id: ruleIds.get(candidate)!,
+                  amount: candidate.averageAmount,
+                  type: candidate.type,
+                  category_id: candidate.category_id,
+                  payee: candidate.payee,
+                  frequency: candidate.inferredFrequency,
+                  start_date: candidate.startDate,
+                  next_occurrence: candidate.nextOccurrence,
+                  anchor_day: candidate.anchorDay,
+                  is_variable: candidate.isVariable ? 1 : 0,
+                });
+              }
+              emitDbEvent("recurring-changed");
+            });
+          }}
         />
       )}
       {state.step === "done" && (
@@ -1579,5 +1678,169 @@ function ReviewRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+// --- Recurring Review ---
+
+function RecurringReviewView({
+  candidates: initial,
+  transactions,
+  onSkip,
+  onCreateAndImport,
+}: {
+  candidates: RecurringCandidate[];
+  transactions: ParsedTransaction[];
+  onSkip: (txns: ParsedTransaction[]) => void;
+  onCreateAndImport: (selected: RecurringCandidate[], txns: ParsedTransaction[]) => void;
+}) {
+  const [candidates, setCandidates] = useState<RecurringCandidate[]>(initial);
+
+  const selectedCount = candidates.filter((c) => c.selected).length;
+
+  function toggleCandidate(id: string) {
+    setCandidates((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, selected: !c.selected } : c)),
+    );
+  }
+
+  function updateFrequency(id: string, freq: RecurringCandidate["inferredFrequency"]) {
+    setCandidates((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const lastDate = c.occurrences[c.occurrences.length - 1]!.date;
+        const anchorDay = (ANCHOR_DAY_FREQUENCIES as readonly string[]).includes(freq)
+          ? parseInt(lastDate.slice(8, 10), 10)
+          : null;
+        return {
+          ...c,
+          inferredFrequency: freq,
+          anchorDay,
+          nextOccurrence: getNextOccurrence(lastDate, freq, anchorDay),
+        };
+      }),
+    );
+  }
+
+  return (
+    <div className="py-2 animate-slide-up">
+      <div className="mb-4">
+        <p className="text-sm font-bold mb-1">
+          {candidates.length} recurring pattern{candidates.length !== 1 ? "s" : ""} detected
+        </p>
+        <p className="text-xs text-text-muted">
+          Select which ones to save as recurring rules.
+        </p>
+      </div>
+
+      <div className="space-y-2 max-h-[360px] overflow-y-auto mb-4">
+        {candidates.map((c) => (
+          <div
+            key={c.id}
+            className={`rounded-lg border transition-colors ${
+              c.selected ? "border-accent/30 bg-accent/3" : "border-border bg-surface"
+            }`}
+          >
+            {/* Header row: checkbox + payee + frequency */}
+            <div className="flex items-center gap-3 px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={c.selected}
+                onChange={() => toggleCandidate(c.id)}
+                className="accent-accent w-3.5 h-3.5 shrink-0 cursor-pointer"
+              />
+              <span className="text-sm font-medium flex-1 min-w-0 truncate">
+                {c.payee}
+              </span>
+              <select
+                value={c.inferredFrequency}
+                onChange={(e) => updateFrequency(c.id, e.target.value as RecurringCandidate["inferredFrequency"])}
+                className="text-xs bg-surface border border-border rounded px-1.5 py-1 outline-none focus:border-accent cursor-pointer"
+              >
+                {FREQUENCIES.map((f) => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Details row */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-2.5 pl-9 text-[11px] text-text-muted">
+              {/* Amount */}
+              <span>
+                {c.isVariable && "~"}
+                {formatCurrency(c.averageAmount)}
+                {c.isVariable && (
+                  <span className="ml-0.5" title="Variable amount">
+                    <svg className="w-3 h-3 inline -mt-px text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                    </svg>
+                  </span>
+                )}
+              </span>
+
+              {/* Category */}
+              {c.category && (
+                <>
+                  <span className="text-border">·</span>
+                  <span>{c.category}</span>
+                </>
+              )}
+
+              {/* Occurrence dates */}
+              <span className="text-border">·</span>
+              <span>
+                {c.occurrences.map((o) => formatDateShort(o.date)).join(", ")}
+              </span>
+
+              {/* Next occurrence */}
+              <span className="text-border">·</span>
+              <span>Next: {formatDateShort(c.nextOccurrence)}</span>
+            </div>
+
+            {/* Badges row */}
+            <div className="flex flex-wrap items-center gap-2 px-3 pb-2.5 pl-9">
+              {c.confidence === "high" ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-success">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                  High confidence
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] text-text-muted">
+                  <span className="w-1.5 h-1.5 rounded-full bg-border" />
+                  {c.occurrences.length} occurrence{c.occurrences.length !== 1 ? "s" : ""}
+                </span>
+              )}
+              {c.existingRuleWarning && (
+                <span className="inline-flex items-center gap-1 text-[10px] text-warning">
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  {c.existingRuleWarning}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2 justify-end">
+        <Button variant="secondary" size="sm" onClick={() => onSkip(transactions)}>
+          Skip
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => {
+            const selected = candidates.filter((c) => c.selected);
+            onCreateAndImport(selected, transactions);
+          }}
+          disabled={selectedCount === 0}
+        >
+          Create {selectedCount} Rule{selectedCount !== 1 ? "s" : ""} & Import
+        </Button>
+      </div>
+    </div>
   );
 }

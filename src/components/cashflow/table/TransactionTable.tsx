@@ -25,7 +25,6 @@ interface TransactionTableProps {
   onDuplicateRow?: SingleMonthViewProps["onDuplicateRow"];
   onCreateCategory?: SingleMonthViewProps["onCreateCategory"];
   onAttachRecurrence?: SingleMonthViewProps["onAttachRecurrence"];
-  onUpdateRecurringFrequency?: SingleMonthViewProps["onUpdateRecurringFrequency"];
   onSelectionChange?: (ids: Set<string>) => void;
   clearSelectionSignal?: number;
 }
@@ -45,7 +44,6 @@ export function TransactionTable({
   onDuplicateRow,
   onCreateCategory,
   onAttachRecurrence,
-  onUpdateRecurringFrequency,
   onSelectionChange,
   clearSelectionSignal,
 }: TransactionTableProps) {
@@ -189,7 +187,6 @@ export function TransactionTable({
             onDuplicateRow={onDuplicateRow}
             onStopRecurrence={onStopRecurrence}
             onAttachRecurrence={onAttachRecurrence}
-            onUpdateRecurringFrequency={onUpdateRecurringFrequency}
             onCreateCategory={handleCreateCategory}
           />
         ))}

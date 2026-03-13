@@ -140,14 +140,16 @@ export async function updateTransactionsBatch(
   await db.exec(`UPDATE transactions SET ${sets.join(", ")} WHERE id IN (${placeholders})`, params);
 }
 
-/** Delete all future planned/review instances of a recurring rule after a given date (exclusive). */
+/** Delete all future planned/review instances of a recurring rule after (or from) a given date. */
 export async function deleteFutureInstancesOfRule(
   db: DbClient,
   recurringId: string,
-  afterDate: string
+  afterDate: string,
+  inclusive = false
 ): Promise<void> {
+  const op = inclusive ? ">=" : ">";
   await db.exec(
-    `DELETE FROM transactions WHERE recurring_id = ? AND status IN ('planned', 'review') AND date > ?`,
+    `DELETE FROM transactions WHERE recurring_id = ? AND status IN ('planned', 'review') AND date ${op} ?`,
     [recurringId, afterDate]
   );
 }

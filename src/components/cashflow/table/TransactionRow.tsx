@@ -27,7 +27,6 @@ interface TransactionRowProps {
   onDuplicateRow?: (row: CashflowRow) => void;
   onStopRecurrence?: (recurringId: string) => void;
   onAttachRecurrence?: (txnId: string, row: CashflowRow, frequency: RecurringTransaction["frequency"]) => void;
-  onUpdateRecurringFrequency?: (recurringId: string, frequency: RecurringTransaction["frequency"]) => void;
   onCreateCategory?: (name: string) => Promise<string>;
 }
 
@@ -46,7 +45,6 @@ export const TransactionRow = memo(function TransactionRow({
   onDuplicateRow,
   onStopRecurrence,
   onAttachRecurrence,
-  onUpdateRecurringFrequency,
   onCreateCategory,
 }: TransactionRowProps) {
   const isPlanned = row.status === "planned" || row.status === "review";
@@ -156,28 +154,17 @@ export const TransactionRow = memo(function TransactionRow({
           onCreateCategory={onCreateCategory}
         />
 
-        {/* Frequency */}
+        {/* Frequency — read-only for existing recurring rules (edit from recurring page) */}
         <FrequencyCell
           value={row.frequency}
           isEditing={editingCol === COLUMN_INDEX.frequency}
+          readOnly={!!row.recurringId}
           onStartEdit={() => startEditCell(COLUMN_INDEX.frequency)}
           onCommit={(v) => {
             dispatch({ type: "COMMIT_CELL" });
-            if (v === null) {
-              // None selected — stop and purge if currently recurring
-              if (row.recurringId && onStopRecurrence) {
-                onStopRecurrence(row.recurringId);
-              }
-            } else if (row.recurringId) {
-              // Already has a rule — change frequency
-              if (onUpdateRecurringFrequency) {
-                onUpdateRecurringFrequency(row.recurringId, v as RecurringTransaction["frequency"]);
-              }
-            } else {
-              // One-time transaction — attach a new rule
-              if (onAttachRecurrence) {
-                onAttachRecurrence(row.id, row, v as RecurringTransaction["frequency"]);
-              }
+            // Only non-recurring transactions can attach a new rule from cashflow
+            if (v !== null && !row.recurringId && onAttachRecurrence) {
+              onAttachRecurrence(row.id, row, v as RecurringTransaction["frequency"]);
             }
           }}
           onCancel={cancelCell}

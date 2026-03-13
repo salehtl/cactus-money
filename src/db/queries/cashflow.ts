@@ -1,5 +1,14 @@
 import type { DbClient } from "../client.ts";
 import type { TransactionWithCategory } from "./transactions.ts";
+import { getToday } from "../../lib/format.ts";
+
+/** Past transactions (date before today) are implicitly confirmed. */
+function confirmPast(rows: TransactionWithCategory[]): TransactionWithCategory[] {
+  const today = getToday();
+  return rows.map((r) =>
+    r.date < today ? { ...r, status: "confirmed" as const } : r
+  );
+}
 
 export async function getTransactionsForMonth(
   db: DbClient,
@@ -15,7 +24,7 @@ export async function getTransactionsForMonth(
      ORDER BY t.date DESC, t.created_at DESC`,
     [month]
   );
-  return rows;
+  return confirmPast(rows);
 }
 
 export async function getTransactionsForRange(
@@ -31,5 +40,5 @@ export async function getTransactionsForRange(
      ORDER BY t.date DESC, t.created_at DESC`,
     [startMonth, endMonth]
   );
-  return rows;
+  return confirmPast(rows);
 }

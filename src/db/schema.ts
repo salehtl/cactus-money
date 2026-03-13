@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const BACKUP_TABLES = [
   "categories",
@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS recurring_transactions (
   is_active INTEGER NOT NULL DEFAULT 1,
   anchor_day INTEGER,
   is_variable INTEGER NOT NULL DEFAULT 0,
+  exceptions TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -135,5 +136,8 @@ ALTER TABLE recurring_transactions ADD COLUMN is_variable INTEGER NOT NULL DEFAU
 UPDATE recurring_transactions
   SET anchor_day = CAST(substr(start_date, 9, 2) AS INTEGER)
   WHERE frequency IN ('monthly', 'quarterly', 'yearly');
+`,
+  4: `
+ALTER TABLE recurring_transactions ADD COLUMN exceptions TEXT NOT NULL DEFAULT '[]';
 `,
 };

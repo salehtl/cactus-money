@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.6.0] - 2026-03-13
+
+### Added
+- **Recurring pattern detection in PDF import**: After parsing a bank statement, recurring patterns are auto-detected using fuzzy payee matching and interval analysis — review step lets you select which patterns to save as recurring rules before importing
+- **Recurring-aware delete**: Deleting a recurring transaction instance now prompts "Just this one" (adds exception) or "This and all future" (stops rule + purges) — works for single and bulk delete
+- **Keyboard month navigation**: Arrow left/right keys navigate between months on cashflow page (when not editing)
+- **Swipe month navigation**: Swipe left/right on mobile to navigate months
+- **Recurring exceptions**: Schema v5 — recurring rules now support date exceptions so deleted individual occurrences aren't recreated by the scheduler
+- **Attach recurrence links existing transactions**: Creating a recurring rule from a one-time transaction now retroactively links matching past transactions by payee/amount/date
+
+### Changed
+- **Frequency cell read-only for recurring instances**: Recurring transaction frequency can no longer be changed inline from cashflow — edit frequency from the recurring page instead
+- **Recurring page bulk delete**: Bulk delete now uses a single confirmation dialog instead of deleting one-by-one
+- **Recurring schedule edits delete all planned instances**: Changing frequency or start date on recurring page now purges all planned/review instances (not just future ones) before regenerating
+
+### Fixed
+- **Past transactions auto-confirmed**: Transactions dated before today are now implicitly shown as "confirmed" in cashflow regardless of stored status
+- **Recurring scheduler respects exceptions**: Exception dates are skipped when generating occurrences for both catch-up and future-month population
+- **`updateRecurring` recomputes next_occurrence on start_date change**: Previously only frequency changes triggered recomputation
+- **`deleteFutureInstancesOfRule` supports inclusive mode**: Needed for stopping recurrence from the clicked date (not just after)
+
+### Removed
+- Planning docs (`docs/plans/`, `docs/specs/`) and `TODO.MD` — superseded by changelog and CLAUDE.md
+
 ## [2.5.0] - 2026-03-13
 
 ### Added

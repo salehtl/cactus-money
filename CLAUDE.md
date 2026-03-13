@@ -36,6 +36,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/) (`Added`, `Changed`, `Fi
 - `bun run preview` — Preview production build
 - `bun run test` — Run tests (Vitest)
 - `bun run test:watch` — Run tests in watch mode
+- `bunx vitest run src/path/to/file.test.ts` — Run a single test file
 
 ## Testing
 
@@ -57,7 +58,7 @@ The DB is the single source of truth — no external state library.
 1. **Web Worker** (`worker/db-worker.ts`) — Runs wa-sqlite async, initializes with OPFS (falls back to IndexedDB), enables WAL mode and foreign keys
 2. **DbClient** (`src/db/client.ts`) — Promise-based `exec<T>(sql, params)` wrapping postMessage/onmessage with request ID tracking
 3. **React Context** (`src/context/DbContext.tsx`) — Provides singleton DbClient via `useDb()` hook, handles loading/error states
-4. **Schema** (`src/db/schema.ts`) — All DDL, versioned via `PRAGMA user_version` (currently version 3)
+4. **Schema** (`src/db/schema.ts`) — All DDL, versioned via `PRAGMA user_version` (currently version 5)
 5. **Query Modules** (`src/db/queries/`) — Typed async functions accepting DbClient: `transactions.ts`, `categories.ts`, `recurring.ts`, `settings.ts`, `cashflow.ts`
 6. **Seed Data** (`src/db/seed.ts`) — ~30 default categories with hierarchy, colors, icons
 
@@ -82,6 +83,8 @@ TanStack Router file-based routing in `src/routes/`. Auto-generates `routeTree.g
 - `index.tsx` — Cashflow page (single-month view with inline add/edit)
 - `overview.tsx` — Multi-month overview with Summary (KPIs, charts) and Detailed (pivot grid) tabs
 - `categories.tsx` — Category management with two-column layout
+- `recurring.tsx` — Recurring rules management with inline editing
+- `zakat.tsx` — Zakat calculator with madhab-aware engine
 - `settings.tsx`
 
 ### Custom Hooks (`src/hooks/`)
@@ -198,4 +201,4 @@ Two-column desktop layout (form left, sticky breakdown right). Mobile: sticky bo
 
 ## Schema (Tables)
 
-`categories` (hierarchical, color/icon, is_income/is_system flags) | `transactions` (amount, type, category_id, date, payee, notes, recurring_id, status, group_name) | `recurring_transactions` (frequency, next_occurrence, mode — joined via `transactions.recurring_id`) | `tags` + `transaction_tags` (many-to-many) | `budgets` (category budgets by month) | `settings` (key-value store)
+`categories` (hierarchical, color/icon, is_income/is_system flags) | `transactions` (amount, type, category_id, date, payee, notes, recurring_id, status, group_name) | `recurring_transactions` (frequency, next_occurrence, mode, anchor_day, is_variable, exceptions — joined via `transactions.recurring_id`) | `tags` + `transaction_tags` (many-to-many) | `budgets` (category budgets by month) | `settings` (key-value store)

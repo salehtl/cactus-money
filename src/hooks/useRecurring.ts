@@ -116,8 +116,9 @@ export function useRecurring() {
       await updateRecurring(db, ruleId, updates);
 
       if (isScheduleChange) {
-        // Delete future instances and regenerate under new schedule
-        await deleteFutureInstancesOfRule(db, ruleId, today);
+        // Delete ALL planned/review instances and regenerate under new schedule
+        // Using "0000-01-01" ensures no stale planned transactions survive (on or before today)
+        await deleteFutureInstancesOfRule(db, ruleId, "0000-01-01", true);
         await processRecurringRuleById(db, ruleId, today);
       } else {
         // Sync scalar fields on future instances

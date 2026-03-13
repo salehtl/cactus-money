@@ -41,8 +41,8 @@ export async function bulkInsertTransactions(
       const now = new Date().toISOString();
       await db.exec(
         `INSERT INTO transactions (id, amount, type, category_id, date, payee, notes, recurring_id, status, group_name, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'confirmed', '', ?, ?)`,
-        [id, t.amount, t.type, t.category_id, t.date, t.payee, t.notes, now, now],
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', '', ?, ?)`,
+        [id, t.amount, t.type, t.category_id, t.date, t.payee, t.notes, t.recurring_id ?? null, now, now],
       );
     }
     await db.exec("COMMIT;");

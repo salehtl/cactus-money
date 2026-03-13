@@ -20,7 +20,6 @@ interface GroupBlockProps {
   onDuplicateRow?: (row: CashflowRow) => void;
   onStopRecurrence?: (recurringId: string) => void;
   onAttachRecurrence?: (txnId: string, row: CashflowRow, frequency: RecurringTransaction["frequency"]) => void;
-  onUpdateRecurringFrequency?: (recurringId: string, frequency: RecurringTransaction["frequency"]) => void;
   onCreateCategory?: (name: string) => Promise<string>;
 }
 
@@ -39,7 +38,6 @@ export const GroupBlock = memo(function GroupBlock({
   onDuplicateRow,
   onStopRecurrence,
   onAttachRecurrence,
-  onUpdateRecurringFrequency,
   onCreateCategory,
 }: GroupBlockProps) {
   const [expanded, setExpanded] = useState(true);
@@ -91,7 +89,6 @@ export const GroupBlock = memo(function GroupBlock({
             onDuplicateRow={onDuplicateRow}
             onStopRecurrence={onStopRecurrence}
             onAttachRecurrence={onAttachRecurrence}
-            onUpdateRecurringFrequency={onUpdateRecurringFrequency}
             onCreateCategory={onCreateCategory}
           />
         );
