@@ -1,40 +1,40 @@
-# dependencies (bun install)
+# dependencies
 node_modules
 
 # output
-out
 dist
-*.tgz
+out
 
 # code coverage
 coverage
 *.lcov
 
 # logs
-logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+*.log
 
-# dotenv environment variable files
+# env (keep .env.development — it's safe)
 .env
-.env.development.local
-.env.test.local
-.env.production.local
 .env.local
+.env.*.local
 
 # caches
-.eslintcache
 .cache
 *.tsbuildinfo
+.tanstack
+.vite
 
-# IntelliJ based IDEs
-.idea
-
-# Finder (MacOS) folder config
+# OS
 .DS_Store
+Thumbs.db
+
+# editors
+.idea
+.vscode
+*.swp
+*.swo
 
 # Wrangler
 .wrangler
-.worktrees/
 
-.tanstack
+# Claude Code worktrees
+.worktrees/
